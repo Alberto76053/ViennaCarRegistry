@@ -8,8 +8,10 @@ The site is plain HTML, CSS and JavaScript (no build step). It runs on GitHub Pa
 
 ## What it does
 
-- Registry with image and name per car, search and filters by brand, model and colour
-- Car page with several photos; guests see photos, colour and district, members see the full details
+- Registry with image and name per car, a big search, filters by brand, model and colour family, and cards in the style of exclusivecarregistry.com
+- Car page with several photos; guests see photos, paint and district, members see the full details with the source of the technical data
+- Official manufacturer paint names (for example Rosso Corsa) instead of a bare colour; the colour family is kept for filtering
+- Only real photos: there are no generated or demo cars
 - Upload with any number of photos, district only (never the exact place), optional production number
 - Verification queue for admins; Pro members are reviewed first; edits by users also need approval
 - Likes, favourites, comments with word filter, warnings and a ban after three, report buttons
@@ -28,7 +30,7 @@ The site is plain HTML, CSS and JavaScript (no build step). It runs on GitHub Pa
 | `js/config.js` | Your Supabase URL and anon key (fill in once) |
 | `js/app.js` | The user interface and routing |
 | `js/api.js` | All calls to Supabase |
-| `js/art.js` | Colours, districts and the placeholder car drawings |
+| `js/art.js` | Colour families, districts and small helpers |
 | `supabase/schema.sql` | Tables, access rules, triggers, storage buckets and start data |
 
 ## Roles

@@ -26,8 +26,14 @@ Plane etwa 30 Minuten ein.
 
 Das legt alle Tabellen, die Zugriffsregeln (Row Level Security), die Speicherordner für Fotos und die sieben Start-Modelle an.
 
-> Wichtig: Die technischen Daten der Modelle (Motor, Leistung, Stückzahl) habe ich aus dem Gedächtnis eingetragen.
-> Bitte prüfe sie, bevor die Seite öffentlich wird. Du kannst sie im **Table Editor** in der Tabelle `model_specs` ändern.
+> **Offizielle Daten:** Die technischen Daten (Motor, Leistung, Getriebe, Stückzahl) stammen von Herstellerseiten und Pressemitteilungen.
+> Die Quelle steht pro Modell in `model_specs.source` und wird Mitgliedern auf der Autoseite angezeigt.
+> Für den **Pagani Huayra** habe ich keine offizielle Quelle gefunden. Er hat deshalb keine Daten und keine Lackliste.
+> Prüfe die Werte bitte noch einmal, bevor die Seite öffentlich wird. Ändern kannst du sie im **Table Editor** in `model_specs`.
+>
+> **Offizielle Lacknamen:** In der Tabelle `model_colors` stehen die Herstellernamen der Lacke (zum Beispiel „Rosso Corsa“).
+> Die Listen sind nicht vollständig, Sonderlacke und Einzelstücke fehlen. Ergänze sie als Admin unter **Admin → Paints**.
+> Die Farbflächen in der Auswahl sind nur Annäherungen, kein Farbmuster des Herstellers.
 
 ## 3. Zugangsdaten in die Seite eintragen
 
@@ -81,7 +87,7 @@ Nur der CEO entscheidet über Admin-Bewerbungen. Admins prüfen Spots, Änderung
 
 ## 7. Zum Ausprobieren: ein erster Spot
 
-1. Mit deinem Konto: **Spot hinzufügen**, Modell wählen, Farbe, Bezirk und Fotos.
+1. Mit deinem Konto: **Spot hinzufügen**, Modell wählen, den offiziellen Lack wählen (gibt es für das Modell keine Liste, wählst du eine Farbgruppe), Bezirk und Fotos. Es gibt keine Beispielautos: Das Register ist leer, bis echte Fotos hochgeladen und freigegeben sind.
 2. Unter **Admin → Spots** den Spot freigeben.
 3. Er erscheint jetzt im Register, auch für Gäste.
 
@@ -106,7 +112,7 @@ Danach: `export const OAUTH_PROVIDERS = ['google', 'apple'];`
 
 - **Pro ist noch nicht bezahlbar.** Es gibt keine Zahlungsanbindung. Du vergibst Pro unter **Admin → People → Give Pro**. Ein Bezahlsystem (zum Beispiel Stripe) wäre ein eigener nächster Schritt.
 - **Events** tragen nur Admins ein (Admin → Events).
-- **Neue Modelle** kommen über Anfragen von Nutzern. Ein Admin nimmt sie auf (Admin → Model requests). Technische Daten ergänzt du danach in `model_specs`.
+- **Neue Modelle** kommen über Anfragen von Nutzern. Ein Admin nimmt sie auf (Admin → Model requests). Danach trägst du unter **Admin → Paints** die offiziellen Lacknamen ein und ergänzt in `model_specs` die technischen Daten mit Quelle (`source`).
 - **Kennzeichen unkenntlich machen** ist noch nicht gebaut. Es steht als „in Überlegung“ auf der Pro-Seite.
 - **Schimpfwortliste:** Die Tabelle `bad_words` enthält nur wenige Beispielwörter. Ergänze deutsche und englische Wörter im Table Editor.
 

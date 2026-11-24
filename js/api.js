@@ -31,7 +31,15 @@ export async function signIn(email, password) { return ok(await sb.auth.signInWi
 export async function signOut() { await sb.auth.signOut(); }
 
 /* ---------- Grunddaten ---------- */
-export async function loadModels() { return ok(await sb.from('models').select('id,brand,name,shape').order('brand').order('name')); }
+export async function loadModels() { return ok(await sb.from('models').select('id,brand,name').order('brand').order('name')); }
+export async function loadColors() {
+  const rows = ok(await sb.from('model_colors').select('*').order('id'));
+  const map = {};
+  rows.forEach(r => { (map[r.model_id] = map[r.model_id] || []).push(r); });
+  return map;
+}
+export async function addPaint(row) { ok(await sb.from('model_colors').insert(row)); }
+export async function deletePaint(id) { ok(await sb.from('model_colors').delete().eq('id', id)); }
 export async function loadSpecs() {
   const rows = ok(await sb.from('model_specs').select('*'));
   const map = {};
@@ -158,7 +166,7 @@ const ext = b => (b.type === 'image/png' ? 'png' : b.type === 'image/webp' ? 'we
 
 export async function uploadSpot(uid, v, onProgress) {
   const spot = ok(await sb.from('spots').insert({
-    user_id: uid, model_id: v.model_id, color: v.color, district: v.district,
+    user_id: uid, model_id: v.model_id, color: v.color, paint: v.paint, district: v.district,
     kind: v.kind, arch_kind: v.kind === 'archive' ? v.arch_kind : null
   }).select('id').single());
   try {
@@ -248,7 +256,7 @@ export async function setSpotStatus(id, status) { ok(await sb.from('spots').upda
 const rpc = async (name, args) => ok(await sb.rpc(name, args));
 export const applyEdit = id => rpc('apply_edit', { edit_id: id });
 export const rejectEdit = id => rpc('reject_edit', { edit_id: id });
-export const approveModelRequest = (id, brand, name, shape) => rpc('approve_model_request', { req_id: id, p_brand: brand, p_name: name, p_shape: shape });
+export const approveModelRequest = (id, brand, name) => rpc('approve_model_request', { req_id: id, p_brand: brand, p_name: name });
 export const declineModelRequest = id => rpc('decline_model_request', { req_id: id });
 export const resolveReport = (id, remove) => rpc('resolve_report', { rep_id: id, remove });
 export const decideApplication = (id, accept) => rpc('decide_application', { app_id: id, accept });

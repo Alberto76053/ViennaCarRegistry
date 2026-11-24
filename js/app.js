@@ -1,7 +1,7 @@
 // Vienna Car Registry – Oberfläche
 import * as api from './api.js';
 import { OAUTH_PROVIDERS } from './config.js';
-import { COLORS, BEZ, distLabel, esc, carSVG } from './art.js';
+import { COLORS, BEZ, distLabel, esc } from './art.js';
 
 /* ---------- Helfer ---------- */
 const $ = (s, r) => (r || document).querySelector(s);
@@ -10,9 +10,9 @@ const pad = n => String(n).padStart(4, '0');
 
 const S = {
   lang: LS('vcr-lang') === 'de' ? 'de' : 'en',
-  theme: LS('vcr-theme') || ((window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light'),
+  theme: LS('vcr-theme') === 'light' ? 'light' : 'dark',
   configured: false, route: 'home', arg: '', pi: 0, tok: 0,
-  me: null, status: null, models: [], specs: {},
+  me: null, status: null, models: [], specs: {}, paints: {},
   likes: new Set(), favs: new Set(), following: new Set(), blocked: new Set(), notes: [],
   f: { q: '', brand: '', model: '', color: '', sort: 'new' },
   list: [], modal: null, authTab: 'in', adminTab: 'spots', notifOpen: false,
@@ -32,7 +32,7 @@ const isAdmin = () => !!S.me && (S.me.role === 'admin' || S.me.role === 'ceo');
 const isCeo = () => !!S.me && S.me.role === 'ceo';
 const isPro = () => !!S.me && (S.me.is_pro || isAdmin());
 const banned = () => !!(S.status && S.status.banned);
-const modelOf = id => S.models.find(m => m.id === id) || { id, brand: '', name: id, shape: 'wedge' };
+const modelOf = id => S.models.find(m => m.id === id) || { id, brand: '', name: id };
 const spotName = s => { const m = modelOf(s.model_id); return `${m.brand} ${m.name}`.trim(); };
 
 const cached = (k, fn) => { if (!S.cache.has(k)) S.cache.set(k, fn()); return S.cache.get(k).catch(e => { S.cache.delete(k); throw e; }); };
@@ -62,7 +62,10 @@ const IC = {
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
   moon: '<path d="M20 14.5A8 8 0 019.5 4 8 8 0 1020 14.5z"/>',
   mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/>',
-  pen: '<path d="M4 20l1-4L16 5l3 3L8 19z"/>'
+  pen: '<path d="M4 20l1-4L16 5l3 3L8 19z"/>',
+  search: '<circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/>',
+  car: '<path d="M4 16v-4l2-5h12l2 5v4M3 16h18M7 16v2.5M17 16v2.5"/><circle cx="8" cy="13" r=".8"/><circle cx="16" cy="13" r=".8"/>',
+  pin: '<path d="M12 21s7-6.2 7-11a7 7 0 10-14 0c0 4.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/>'
 };
 const ic = n => `<svg viewBox="0 0 24 24" aria-hidden="true">${IC[n]}</svg>`;
 
@@ -80,8 +83,7 @@ function photoHTML(s, i) {
   i = i || 0;
   const url = (s.photos || [])[i];
   if (url) return `<img src="${esc(url)}" alt="${esc(spotName(s))}" loading="lazy">`;
-  const m = modelOf(s.model_id);
-  return carSVG(COLORS[s.color].hex, m.shape, (s.id + i) % 3, i % 2 === 1, spotName(s));
+  return `<div class="nophoto"><span>${esc(spotName(s))}</span></div>`;
 }
 const tile = s => `<a class="tile" href="#car-${s.id}"><div class="ph">${photoHTML(s, 0)}</div><div class="nm">${esc(spotName(s))}</div></a>`;
 
@@ -103,7 +105,7 @@ ${S.me ? `<button class="ibtn" data-act="bell" aria-label="${L('Notifications', 
 <a class="ibtn" href="#messages" aria-label="${L('Messages', 'Nachrichten')}">${ic('mail')}</a>
 <a href="#profile-${esc(S.me.username)}" aria-label="${L('My profile', 'Mein Profil')}">${av(S.me, 38)}</a>`
     : `<button class="btn ghost sm" data-act="login">${L('Sign in', 'Anmelden')}</button>`}
-<a class="btn yel sm" href="#upload">${L('Add a spot', 'Spot hinzufügen')}</a>
+<a class="btn sm" href="#upload">${L('Add a spot', 'Spot hinzufügen')}</a>
 </div></div>
 ${S.notifOpen && S.me ? notifPanel() : ''}</header>`;
 }
@@ -134,7 +136,7 @@ function filtered() {
   if (f.brand) a = a.filter(s => modelOf(s.model_id).brand === f.brand);
   if (f.model) a = a.filter(s => s.model_id === f.model);
   if (f.color) a = a.filter(s => s.color === f.color);
-  if (q) a = a.filter(s => (spotName(s) + ' ' + COLORS[s.color].n.join(' ')).toLowerCase().includes(q));
+  if (q) a = a.filter(s => (spotName(s) + ' ' + COLORS[s.color].n.join(' ') + ' ' + (s.paint || '')).toLowerCase().includes(q));
   a = a.slice().sort(f.sort === 'likes' ? (x, y) => (y.likes - x.likes) || (y.id - x.id) : (x, y) => (y.id - x.id));
   return a;
 }
@@ -148,29 +150,32 @@ const countText = () => { const n = filtered().length; return L(`${n} ${n === 1 
 
 async function pageHome() {
   S.list = await cached('reg', () => api.listSpots('registry'));
-  const f = S.f, hero = S.list[0];
+  const f = S.f;
   const brands = [...new Set(S.models.map(m => m.brand))];
   const models = S.models.filter(m => !f.brand || m.brand === f.brand);
-  const heroImg = hero
-    ? `<a class="heroI" href="#car-${hero.id}" aria-label="${esc(spotName(hero))}">${photoHTML(hero, 0)}<span class="cap">${plate(hero)} ${esc(distLabel(hero.district))}</span></a>`
-    : `<div class="heroI">${carSVG(COLORS.yellow.hex, 'coupe', 1, false, '')}</div>`;
-  return `<section class="hero"><div class="wrap herog"><div>
-<h1>${L("Discover Vienna's finest automobiles", 'Entdecke Wiens feinste Automobile')}</h1>
-<p class="lead">${L('A community registry of exclusive cars seen in Vienna. Spot one, add it, and an admin checks it before it goes public.', 'Ein Community-Register für exklusive Autos in Wien. Spotte eins, lade es hoch, und ein Admin prüft es, bevor es öffentlich wird.')}</p>
-<div class="row"><a class="btn" href="#upload">${L('Add a spot', 'Spot hinzufügen')}</a><a class="btn ghost" href="#reg" data-act="toreg">${L('Browse the registry', 'Register durchsuchen')}</a></div></div>${heroImg}</div></section>
-<section class="wrap" id="reg"><div class="filters">
-<label class="sr" for="q">${L('Search', 'Suche')}</label><input class="fi" id="q" type="search" placeholder="${L('Search brand, model, colour', 'Marke, Modell, Farbe suchen')}" value="${esc(f.q)}">
+  const vis = S.list.filter(s => !S.blocked.has(s.user_id));
+  const nModels = new Set(vis.map(s => s.model_id)).size, nDist = new Set(vis.map(s => s.district)).size;
+  const stat = (i, n, l) => `<div class="stat">${ic(i)}<b>${n}</b><span>${l}</span></div>`;
+  const perBrand = b => { const ms = S.models.filter(m => m.brand === b), ids = new Set(ms.map(m => m.id)); return [ms.length, vis.filter(s => ids.has(s.model_id)).length]; };
+  const brandCards = brands.map(b => { const c = perBrand(b); return `<button class="brandc" data-act="brandf" data-v="${esc(b)}"><b>${esc(b)}</b><span>${c[0]} ${c[0] === 1 ? L('model', 'Modell') : L('models', 'Modelle')}</span><span>${c[1]} ${c[1] === 1 ? L('car', 'Auto') : L('cars', 'Autos')}</span></button>`; }).join('');
+  return `<section class="wrap hero"><p class="welcome">${L('Welcome to', 'Willkommen bei')}</p><h1>VIENNA CAR REGISTRY</h1>
+<p class="lead">${L("Discover Vienna's finest automobiles. Every spot is checked by an admin and shown with official data and paint names.", 'Entdecke Wiens feinste Automobile. Jeder Spot wird von einem Admin geprüft und mit offiziellen Daten und Lacknamen gezeigt.')}</p>
+<form class="bigsearch" role="search" data-form="search"><label class="sr" for="q">${L('Search', 'Suche')}</label><input id="q" type="search" placeholder="${L('Search for brand, model or paint', 'Marke, Modell oder Lack suchen')}" value="${esc(f.q)}" autocomplete="off"><button type="submit" aria-label="${L('Search', 'Suchen')}">${ic('search')}</button></form>
+<div class="stats">${stat('car', vis.length, L('Cars registered', 'Autos im Register'))}${stat('star', nModels, L('Models spotted', 'Modelle gespottet'))}${stat('pin', nDist, L('Districts', 'Bezirke'))}</div></section>
+<section class="wrap" id="reg"><div class="blockhead"><h2>${L('The registry', 'Das Register')}</h2>
+<div class="tabs" role="group" aria-label="${L('Sort', 'Sortierung')}"><button data-act="sort" data-v="new" aria-pressed="${f.sort === 'new'}">${L('Newest', 'Neueste')}</button><button data-act="sort" data-v="likes" aria-pressed="${f.sort === 'likes'}">${L('Most liked', 'Meiste Likes')}</button></div></div>
+<div class="filters">
 <label class="sr" for="fb">${L('Brand', 'Marke')}</label><select class="fi" id="fb"><option value="">${L('All brands', 'Alle Marken')}</option>${brands.map(b => `<option${f.brand === b ? ' selected' : ''}>${esc(b)}</option>`).join('')}</select>
 <label class="sr" for="fm">${L('Model', 'Modell')}</label><select class="fi" id="fm"><option value="">${L('All models', 'Alle Modelle')}</option>${models.map(m => `<option value="${esc(m.id)}"${f.model === m.id ? ' selected' : ''}>${esc(m.name)}</option>`).join('')}</select>
-<label class="sr" for="fs">${L('Sort', 'Sortierung')}</label><select class="fi" id="fs"><option value="new"${f.sort === 'new' ? ' selected' : ''}>${L('Newest first', 'Neueste zuerst')}</option><option value="likes"${f.sort === 'likes' ? ' selected' : ''}>${L('Most liked', 'Meiste Likes')}</option></select>
 <div class="swatches" role="group" aria-label="${L('Colour', 'Farbe')}">${Object.keys(COLORS).map(k => `<button class="sw" data-act="colorf" data-v="${k}" style="background:${COLORS[k].hex}" aria-pressed="${f.color === k}" aria-label="${cn(k)}" title="${cn(k)}"></button>`).join('')}</div>
 <span class="count" id="count">${countText()}</span></div>
-<div id="gridwrap">${gridHTML()}</div></section>`;
+<div id="gridwrap">${gridHTML()}</div></section>
+${brands.length ? `<section class="wrap sec"><h2>${L('Explore by brand', 'Nach Marke entdecken')}</h2><div class="brands">${brandCards}</div></section>` : ''}`;
 }
 
 function lockedArchive() {
   return head('Vienna Archives', L('Ex-Viennese cars, visitors from abroad and event cars. Archive access is part of Pro.', 'Ex-Wiener Autos, Besucher aus dem Ausland und Event-Autos. Der Archiv-Zugang gehört zu Pro.'))
-    + `<div class="wrap sec"><div class="row"><a class="btn yel" href="#pro">${L('See Pro', 'Pro ansehen')}</a>${S.me ? '' : `<button class="btn ghost" data-act="login">${L('Sign in', 'Anmelden')}</button>`}</div></div>`;
+    + `<div class="wrap sec"><div class="row"><a class="btn" href="#pro">${L('See Pro', 'Pro ansehen')}</a>${S.me ? '' : `<button class="btn ghost" data-act="login">${L('Sign in', 'Anmelden')}</button>`}</div></div>`;
 }
 async function pageArchive() {
   if (!isPro()) return lockedArchive();
@@ -191,7 +196,8 @@ async function pageCar(id) {
   const mine = S.me && S.me.id === s.user_id;
   const sp = S.specs[s.model_id] || {};
   const thumbs = n > 1 ? `<div class="thumbs">${Array.from({ length: n }, (_, i) => `<button data-act="thumb" data-i="${i}" aria-label="${L('Photo', 'Foto')} ${i + 1}" ${i === pi ? 'aria-current="true"' : ''}>${photoHTML(s, i)}</button>`).join('')}</div>` : '';
-  const pub = [[L('Colour', 'Farbe'), cn(s.color)], [L('District', 'Bezirk'), esc(distLabel(s.district))]];
+  const pr = s.paint ? (S.paints[s.model_id] || []).find(x => x.name === s.paint) : null;
+  const pub = [[s.paint ? L('Paint', 'Lack') : L('Colour', 'Farbe'), s.paint ? `${pr ? `<i class="swd" style="background:${esc(pr.hex)}"></i>` : ''}${esc(s.paint)} <span class="mute sm">${cn(s.color)}</span>` : cn(s.color)], [L('District', 'Bezirk'), esc(distLabel(s.district))]];
   if (s.kind === 'archive') pub.push([L('Archive', 'Archiv'), archL(s.arch_kind)]);
   const dash = v => (v == null || v === '' ? '—' : esc(v));
   const priv = [
@@ -219,6 +225,7 @@ ${cs.map(c => `<div class="cm">${av(d.authors[c.user_id], 36)}<div><div class="m
 <div><div class="row" style="margin-bottom:10px">${plate(s, true)}${s.status === 'pending' ? `<span class="tag warn">${L('Waiting for approval', 'Wartet auf Freigabe')}</span>` : ''}</div>
 <h1 style="font-size:clamp(32px,4vw,46px)">${esc(spotName(s))}</h1>${pend}
 <dl class="facts">${rows(pub)}${S.me ? rows(priv) : ''}</dl>
+${S.me && sp.source && /^https:\/\//.test(sp.source) ? `<p class="src">${L('Source of the technical data:', 'Quelle der technischen Daten:')} <a href="${esc(sp.source)}" target="_blank" rel="noopener noreferrer">${esc(sp.source.replace(/^https:\/\/(www\.)?/, '').split('/')[0])}</a></p>` : ''}
 ${S.me ? '' : `<div class="lock">${ic('lock')}<div><p>${L('Engine, transmission, production number and more are visible with an account.', 'Motor, Getriebe, Produktionsnummer und mehr siehst du mit einem Konto.')}</p><button class="btn sm" data-act="login">${L('Sign in', 'Anmelden')}</button></div></div>`}
 <div class="row" style="margin-top:20px">
 <button class="btn ghost sm" data-act="like" data-id="${s.id}" aria-pressed="${liked}">${ic('heart')} ${likeCount}</button>
@@ -270,8 +277,8 @@ async function pageProfile(name) {
   for (let i = 0; i < shown; i++) {
     const mid = bySlot[i];
     if (mid) {
-      const m = modelOf(mid), keys = Object.keys(COLORS);
-      g += `<div class="slot full">${carSVG(COLORS[keys[(i * 3 + m.name.length) % keys.length]].hex, m.shape, i % 3, i % 2 === 1, `${m.brand} ${m.name}`)}<span>${esc(`${m.brand} ${m.name}`)}</span>${me ? `<button data-act="gdel" data-i="${i}" aria-label="${L('Remove', 'Entfernen')}">×</button>` : ''}</div>`;
+      const m = modelOf(mid);
+      g += `<div class="slot full"><small>${esc(m.brand)}</small><span>${esc(m.name)}</span>${me ? `<button data-act="gdel" data-i="${i}" aria-label="${L('Remove', 'Entfernen')}">×</button>` : ''}</div>`;
     } else if (me && i === firstEmpty) {
       g += `<div class="slot"><label class="sr" for="gs">${L('Add a car', 'Auto hinzufügen')}</label><select id="gs" data-gsel="${i}"><option value="">${L('Add a car…', 'Auto hinzufügen …')}</option>${S.models.map(m => `<option value="${esc(m.id)}">${esc(`${m.brand} ${m.name}`)}</option>`).join('')}</select></div>`;
     } else g += `<div class="slot">${L('Empty slot', 'Freier Platz')}</div>`;
@@ -314,7 +321,22 @@ async function pageMessages() {
 <form data-form="msg" class="row" style="margin-top:14px;flex-wrap:nowrap"><label class="sr" for="mt1">${L('Message', 'Nachricht')}</label><input class="fi" id="mt1" name="text" type="text" maxlength="500" placeholder="${L('Write a message', 'Nachricht schreiben')}" style="flex:1" autocomplete="off"><button class="btn" type="submit">${L('Send', 'Senden')}</button></form>` : ''}</div></div></div>`;
 }
 
-const swatchRadios = sel => Object.keys(COLORS).map(k => `<label><input type="radio" name="color" value="${k}"${sel === k ? ' checked' : ''}><span style="background:${COLORS[k].hex}"></span>${cn(k)}</label>`).join('');
+const famRadios = sel => Object.keys(COLORS).map(k => `<label><input type="radio" name="color" value="${k}"${sel === k ? ' checked' : ''}><span style="background:${COLORS[k].hex}"></span>${cn(k)}</label>`).join('');
+// Lackauswahl: offizielle Herstellernamen des Modells; ohne Liste oder mit "Anderer" zählt die Farbgruppe
+function paintPicker(mid, selPaint, selFam, allowOther) {
+  if (!mid) return `<p class="hint">${L('Choose a model first. Then you can pick its official paint.', 'Wähle zuerst ein Modell. Dann kannst du den offiziellen Lack wählen.')}</p>`;
+  const ps = S.paints[mid] || [], other = allowOther !== false, oth = other && !selPaint;
+  const list = ps.map(p => `<label><input type="radio" name="paint" value="${esc(p.name)}"${selPaint === p.name ? ' checked' : ''}><span style="background:${esc(p.hex)}"></span>${esc(p.name)}</label>`).join('');
+  const otherOpt = other && ps.length ? `<label><input type="radio" name="paint" value=""${oth ? ' checked' : ''}><span class="sw0"></span>${L('Other / not listed', 'Anderer / nicht gelistet')}</label>` : '';
+  const showFam = other && (oth || !ps.length);
+  return `<fieldset><legend>${L('Paint', 'Lack')}</legend>${ps.length ? `<div class="swr paints">${list}${otherOpt}</div>` : `<p class="hint">${L('No official paint list for this model yet. Choose the closest colour.', 'Für dieses Modell gibt es noch keine offizielle Lackliste. Wähle die nächste Farbe.')}</p>`}<div id="famwrap" class="swr"${showFam ? '' : ' hidden'}>${famRadios(selFam)}</div></fieldset>`;
+}
+function pickColor(mid, v) {
+  const name = String(v.get('paint') || '');
+  if (name) { const r = (S.paints[mid] || []).find(x => x.name === name); return r ? { color: r.family, paint: r.name } : { err: 1 }; }
+  const c = v.get('color');
+  return c && COLORS[c] ? { color: c, paint: null } : { err: 1 };
+}
 const distOpts = sel => BEZ.map((b, i) => `<option value="${i + 1}"${sel === i + 1 ? ' selected' : ''}>${esc(distLabel(i + 1))}</option>`).join('');
 const prevHTML = () => S.up.files.map((f, i) => `<div><img src="${f.url}" alt="${esc(f.file.name)}"><button type="button" data-act="rmphoto" data-i="${i}" aria-label="${L('Remove photo', 'Foto entfernen')}">×</button></div>`).join('');
 
@@ -329,7 +351,7 @@ function pageUpload() {
 <div id="archkind" ${k === 'archive' ? '' : 'hidden'}><label for="ak">${L('Archive type', 'Archiv-Art')}</label><select id="ak" name="arch"><option value="ex">${archL('ex')}</option><option value="visit">${archL('visit')}</option><option value="event">${archL('event')}</option></select></div>
 <div><label for="um">${L('Model', 'Modell')}</label><select id="um" name="model" required><option value="">${L('Choose a model', 'Modell wählen')}</option>${S.models.map(m => `<option value="${esc(m.id)}">${esc(`${m.brand} ${m.name}`)}</option>`).join('')}</select>
 <p class="hint">${L('Model missing?', 'Modell fehlt?')} <button type="button" class="linkb" data-act="reqmodel">${L('Request it', 'Anfragen')}</button></p></div>
-<fieldset><legend>${L('Colour', 'Farbe')}</legend><div class="swr">${swatchRadios('')}</div></fieldset>
+<div id="paintpick">${paintPicker('', '', '')}</div>
 <div><label for="ud">${L('District', 'Bezirk')}</label><select id="ud" name="district"><option value="">${L('Choose a district', 'Bezirk wählen')}</option>${distOpts(0)}</select><p class="hint">${L('Only the district is shown, never the exact spot.', 'Es wird nur der Bezirk angezeigt, nie der genaue Ort.')}</p></div>
 <div><label for="up">${L('Production number (optional)', 'Produktionsnummer (optional)')}</label><input id="up" name="prod" type="text" inputmode="numeric" maxlength="4" placeholder="123"><p class="hint">${L('For example 123 of 500.', 'Zum Beispiel Nr. 123 von 500.')}</p></div>
 <div><label for="files">${L('Photos', 'Fotos')}</label><input id="files" type="file" accept="image/*" multiple><p class="hint">${L('As many as you like. More angles are better.', 'So viele du willst. Mehr Blickwinkel sind besser.')}</p><div class="prev" id="prev">${prevHTML()}</div><p class="err" id="uerr">${esc(S.errUp)}</p></div>
@@ -350,7 +372,17 @@ const noneYet = () => `<p class="mute" style="padding:24px 0">${L('Nothing waiti
 const byPro = (A, a, b) => ((A.authors[b.user_id] || {}).is_pro ? 1 : 0) - ((A.authors[a.user_id] || {}).is_pro ? 1 : 0) || a.id - b.id;
 function qSpot(A, s) {
   const u = A.authors[s.user_id];
-  return `<div class="qrow"><div class="qthumb">${photoHTML(s, 0)}</div><div class="qmain"><strong>${esc(spotName(s))}</strong> ${u && u.is_pro ? `<span class="pro">Pro · ${L('priority', 'Vorrang')}</span>` : ''}<p class="mute sm">${uLink(u)} · ${esc(distLabel(s.district))} · ${cn(s.color)} · ${fd(s.created_at)}${s.kind === 'archive' ? ' · ' + archL(s.arch_kind) : ''}</p></div><div class="qact"><a class="btn ghost sm" href="#car-${s.id}">${L('Open', 'Öffnen')}</a><button class="btn sm" data-act="approve" data-id="${s.id}">${L('Approve', 'Freigeben')}</button><button class="btn red sm" data-act="reject" data-id="${s.id}">${L('Reject', 'Ablehnen')}</button></div></div>`;
+  return `<div class="qrow"><div class="qthumb">${photoHTML(s, 0)}</div><div class="qmain"><strong>${esc(spotName(s))}</strong> ${u && u.is_pro ? `<span class="pro">Pro · ${L('priority', 'Vorrang')}</span>` : ''}<p class="mute sm">${uLink(u)} · ${esc(distLabel(s.district))} · ${esc(s.paint || cn(s.color))} · ${fd(s.created_at)}${s.kind === 'archive' ? ' · ' + archL(s.arch_kind) : ''}</p></div><div class="qact"><a class="btn ghost sm" href="#car-${s.id}">${L('Open', 'Öffnen')}</a><button class="btn sm" data-act="approve" data-id="${s.id}">${L('Approve', 'Freigeben')}</button><button class="btn red sm" data-act="reject" data-id="${s.id}">${L('Reject', 'Ablehnen')}</button></div></div>`;
+}
+function paintsAdmin() {
+  const fams = Object.keys(COLORS).map(k => `<option value="${k}">${cn(k)}</option>`).join('');
+  const form = `<form data-form="paint" class="form" style="padding:18px 0 10px;max-width:560px"><p class="mute sm">${L('Use the official paint name from the manufacturer. The swatch is only an approximation for the picker.', 'Nimm den offiziellen Lacknamen des Herstellers. Die Farbfläche ist nur eine Annäherung für die Auswahl.')}</p>
+<div><label for="pm">${L('Model', 'Modell')}</label><select id="pm" name="model">${S.models.map(m => `<option value="${esc(m.id)}">${esc(`${m.brand} ${m.name}`)}</option>`).join('')}</select></div>
+<div><label for="pn">${L('Official paint name', 'Offizieller Lackname')}</label><input id="pn" name="name" type="text" maxlength="60" placeholder="Rosso Corsa" required></div>
+<div class="row"><div style="flex:1;min-width:150px"><label for="pf">${L('Colour family', 'Farbgruppe')}</label><select id="pf" name="family">${fams}</select></div><div style="flex:1;min-width:150px"><label for="phx">${L('Swatch (hex)', 'Farbfläche (Hex)')}</label><input id="phx" name="hex" type="text" maxlength="7" placeholder="#C8102E" required></div></div>
+<p class="err" id="perr2"></p><div class="row"><button class="btn" type="submit">${L('Add paint', 'Lack hinzufügen')}</button></div></form>`;
+  const list = S.models.map(m => { const ps = S.paints[m.id] || []; return `<h3 style="margin:22px 0 6px">${esc(`${m.brand} ${m.name}`)}</h3>${ps.length ? ps.map(x => `<div class="qrow"><div class="qmain"><i class="swd" style="background:${esc(x.hex)}"></i><strong>${esc(x.name)}</strong> <span class="mute sm">${cn(x.family)} · ${esc(x.hex)}</span></div><div class="qact"><button class="btn red sm" data-act="paintdel" data-id="${x.id}">${L('Delete', 'Löschen')}</button></div></div>`).join('') : `<p class="mute sm">${L('No official paint list yet. Spotters pick a colour family instead.', 'Noch keine offizielle Lackliste. Spotter wählen stattdessen eine Farbgruppe.')}</p>`}`; }).join('');
+  return form + list;
 }
 function adminBody(A) {
   const t = S.adminTab, sn = id => { const s = A.refSpots.find(x => x.id === id); return s ? spotName(s) : '—'; };
@@ -359,7 +391,8 @@ function adminBody(A) {
   if (t === 'edits') return A.edits.length ? A.edits.map(e => {
     const s = A.refSpots.find(x => x.id === e.spot_id); if (!s) return '';
     const ch = [];
-    if (e.color) ch.push(`${L('Colour', 'Farbe')}: ${cn(s.color)} → ${cn(e.color)}`);
+    if (e.paint) ch.push(`${L('Paint', 'Lack')}: ${esc(s.paint || cn(s.color))} → ${esc(e.paint)}`);
+    else if (e.color) ch.push(`${L('Colour', 'Farbe')}: ${cn(s.color)} → ${cn(e.color)}`);
     if (e.district) ch.push(`${L('District', 'Bezirk')}: ${esc(distLabel(s.district))} → ${esc(distLabel(e.district))}`);
     if (e.prod_no) ch.push(`${L('Production no.', 'Produktionsnr.')}: → ${esc(e.prod_no)}`);
     if (e.arch_kind) ch.push(`${L('Archive request', 'Archiv-Anfrage')}: ${archL(e.arch_kind)}`);
@@ -375,6 +408,7 @@ function adminBody(A) {
     const st = A.status[u.id] || { warnings: 0, banned: false };
     return `<div class="qrow"><div class="qmain"><strong>${uLink(u)}</strong> ${u.role !== 'member' ? `<span class="tag">${esc(u.role)}</span>` : ''}${st.banned ? ` <span class="tag warn">${L('Suspended', 'Gesperrt')}</span>` : ''}<p class="mute sm">${L('Warnings', 'Verwarnungen')}: ${st.warnings}</p></div><div class="qact"><button class="btn ghost sm" data-act="uact" data-id="${u.id}" data-a="${u.is_pro ? 'pro_off' : 'pro_on'}">${u.is_pro ? L('Remove Pro', 'Pro entziehen') : L('Give Pro', 'Pro geben')}</button>${st.banned || st.warnings ? `<button class="btn ghost sm" data-act="uact" data-id="${u.id}" data-a="unban">${L('Reset warnings', 'Verwarnungen zurücksetzen')}</button>` : ''}${!st.banned && u.role === 'member' ? `<button class="btn red sm" data-act="uact" data-id="${u.id}" data-a="ban">${L('Suspend', 'Sperren')}</button>` : ''}</div></div>`;
   }).join('');
+  if (t === 'paints') return paintsAdmin();
   if (t === 'events') return `<form data-form="event" class="form" style="padding:18px 0 10px;max-width:560px"><div><label for="et">${L('Title', 'Titel')}</label><input id="et" name="title" type="text" required></div><div class="row"><div style="flex:1;min-width:150px"><label for="ed">${L('Date', 'Datum')}</label><input id="ed" name="date" type="text" placeholder="2027-04-17" required></div><div style="flex:1;min-width:150px"><label for="edi">${L('District', 'Bezirk')}</label><select id="edi" name="d">${distOpts(1)}</select></div></div><div><label for="ep">${L('Place', 'Ort')}</label><input id="ep" name="place" type="text"></div><div><label for="ex">${L('Description', 'Beschreibung')}</label><textarea id="ex" name="text" rows="2"></textarea></div><p class="err" id="eerr"></p><div class="row"><button class="btn" type="submit">${L('Add event', 'Event hinzufügen')}</button></div></form>${A.events.map(e => `<div class="qrow"><div class="qmain"><strong>${esc(e.title)}</strong><p class="mute sm">${fd(e.starts_on)}${e.district ? ' · ' + esc(distLabel(e.district)) : ''}</p></div><div class="qact"><button class="btn red sm" data-act="evdel" data-id="${e.id}">${L('Delete', 'Löschen')}</button></div></div>`).join('')}`;
   return '';
 }
@@ -382,7 +416,7 @@ async function pageAdmin() {
   if (!isAdmin()) return head('Admin', L('This area is for admins. Applications are open.', 'Dieser Bereich ist für Admins. Bewerbungen sind offen.')) + `<div class="wrap sec"><a class="btn" href="#apply">${L('Become an admin', 'Admin werden')}</a></div>`;
   const A = await cached('admin', async () => { const a = await api.adminData(); a.events = await api.listEvents(); return a; });
   const cnt = { spots: A.spots.filter(s => s.kind === 'registry').length, archive: A.spots.filter(s => s.kind === 'archive').length, edits: A.edits.length, models: A.models.length, reports: A.reports.length, apps: A.apps.length };
-  const tabs = [['spots', L('Spots', 'Spots')], ['edits', L('Edits', 'Änderungen')], ['archive', L('Archive requests', 'Archiv-Anfragen')], ['models', L('Model requests', 'Modell-Anfragen')], ['reports', L('Reports', 'Meldungen')], ['apps', L('Applications', 'Bewerbungen')], ['users', L('People', 'Personen')], ['events', 'Events']];
+  const tabs = [['spots', L('Spots', 'Spots')], ['edits', L('Edits', 'Änderungen')], ['archive', L('Archive requests', 'Archiv-Anfragen')], ['models', L('Model requests', 'Modell-Anfragen')], ['reports', L('Reports', 'Meldungen')], ['apps', L('Applications', 'Bewerbungen')], ['users', L('People', 'Personen')], ['paints', L('Paints', 'Lacke')], ['events', 'Events']];
   return head('Admin', L('Pro members are listed first in the queue.', 'Pro-Mitglieder stehen zuerst in der Warteschlange.'))
     + `<div class="wrap sec"><div class="tabs" role="group" aria-label="Admin">${tabs.map(t => `<button data-act="atab" data-v="${t[0]}" aria-pressed="${S.adminTab === t[0]}">${t[1]}${cnt[t[0]] != null ? `<em>${cnt[t[0]]}</em>` : ''}</button>`).join('')}</div><div id="abody">${adminBody(A)}</div></div>`;
 }
@@ -409,7 +443,7 @@ ${up || OAUTH_PROVIDERS.length ? `<label class="chk"><input type="checkbox" id="
   if (m.t === 'edit') {
     const s = m.spot;
     c = `<h2 id="mt">${L('Edit your spot', 'Spot bearbeiten')}</h2><p class="mute sm">${L('Changes go live after an admin approves them.', 'Änderungen gehen online, sobald ein Admin sie freigibt.')}</p>
-<form data-form="edit"><div><label for="ec">${L('Colour', 'Farbe')}</label><select id="ec" name="color">${Object.keys(COLORS).map(k => `<option value="${k}"${s.color === k ? ' selected' : ''}>${cn(k)}</option>`).join('')}</select></div><div><label for="ed2">${L('District', 'Bezirk')}</label><select id="ed2" name="district">${distOpts(s.district)}</select></div><div><label for="ep2">${L('Production number', 'Produktionsnummer')}</label><input id="ep2" type="text" name="prod" maxlength="4" value="${esc(m.prod || '')}"></div>
+<form data-form="edit">${paintPicker(s.model_id, s.paint || '', s.color, !s.paint)}<div><label for="ed2">${L('District', 'Bezirk')}</label><select id="ed2" name="district">${distOpts(s.district)}</select></div><div><label for="ep2">${L('Production number', 'Produktionsnummer')}</label><input id="ep2" type="text" name="prod" maxlength="4" value="${esc(m.prod || '')}"></div>
 ${s.kind === 'registry' ? `<div><label for="ear">${L('Ask to move it to the Vienna Archives', 'Aufnahme in die Vienna Archives anfragen')}</label><select id="ear" name="arch"><option value="">${L('No, keep it in the registry', 'Nein, im Register lassen')}</option><option value="ex">${archL('ex')}</option><option value="visit">${archL('visit')}</option><option value="event">${archL('event')}</option></select></div>` : ''}
 <button class="btn" type="submit">${L('Send for approval', 'Zur Freigabe senden')}</button></form>`;
   }
@@ -417,8 +451,8 @@ ${s.kind === 'registry' ? `<div><label for="ear">${L('Ask to move it to the Vien
 <form data-form="model"><div><label for="mq">${L('Brand and model', 'Marke und Modell')}</label><input id="mq" name="text" type="text" maxlength="60" placeholder="Bugatti Chiron" required></div><button class="btn" type="submit">${L('Send request', 'Anfrage senden')}</button></form>`;
   if (m.t === 'profile') c = `<h2 id="mt">${L('Edit profile', 'Profil bearbeiten')}</h2>
 <form data-form="profile"><div><label for="pu">${L('Username', 'Benutzername')}</label><input id="pu" name="username" type="text" maxlength="20" value="${esc(S.me.username)}"></div><div><label for="pb">${L('Bio', 'Bio')}</label><textarea id="pb" name="bio" rows="3" maxlength="300">${esc(S.me.bio)}</textarea></div><p class="err" id="perr"></p><button class="btn" type="submit">${L('Save', 'Speichern')}</button></form>`;
-  if (m.t === 'modelok') c = `<h2 id="mt">${L('Add model', 'Modell aufnehmen')}</h2><p class="mute sm">${L('Check brand and name. Technical data can be added later in Supabase.', 'Prüfe Marke und Namen. Technische Daten kannst du später in Supabase ergänzen.')}</p>
-<form data-form="modelok"><div><label for="mb">${L('Brand', 'Marke')}</label><input id="mb" name="brand" type="text" value="${esc(m.brand)}" required></div><div><label for="mn">${L('Name', 'Name')}</label><input id="mn" name="name" type="text" value="${esc(m.name)}" required></div><div><label for="ms">${L('Shape of the placeholder drawing', 'Form der Platzhalter-Zeichnung')}</label><select id="ms" name="shape"><option value="wedge">wedge</option><option value="coupe">coupe</option><option value="spyder">spyder</option></select></div><button class="btn" type="submit">${L('Add model', 'Modell aufnehmen')}</button></form>`;
+  if (m.t === 'modelok') c = `<h2 id="mt">${L('Add model', 'Modell aufnehmen')}</h2><p class="mute sm">${L('Check brand and name. Add the official paints in the Paints tab, and the technical data with its source in Supabase.', 'Prüfe Marke und Namen. Die offiziellen Lacke trägst du im Tab Lacke ein, die technischen Daten mit Quelle in Supabase.')}</p>
+<form data-form="modelok"><div><label for="mb">${L('Brand', 'Marke')}</label><input id="mb" name="brand" type="text" value="${esc(m.brand)}" required></div><div><label for="mn">${L('Name', 'Name')}</label><input id="mn" name="name" type="text" value="${esc(m.name)}" required></div><button class="btn" type="submit">${L('Add model', 'Modell aufnehmen')}</button></form>`;
   return `<div class="back" data-act="backdrop"><div class="mod" role="dialog" aria-modal="true" aria-labelledby="mt">${x}${c}</div></div>`;
 }
 const openModal = m => { S.modal = m; render(); };
@@ -521,6 +555,8 @@ async function act(a, d, e, el) {
     }
     case 'reqmodel': openModal({ t: 'model' }); break;
     case 'editprofile': openModal({ t: 'profile' }); break;
+    case 'sort': S.f.sort = d.v; render(); break;
+    case 'brandf': S.f.brand = d.v; S.f.model = ''; await render(); $('#reg').scrollIntoView(); break;
     case 'colorf': S.f.color = S.f.color === d.v ? '' : d.v; render(); break;
     case 'clear': S.f = { q: '', brand: '', model: '', color: '', sort: S.f.sort }; render(); break;
     case 'follow': {
@@ -551,6 +587,7 @@ async function act(a, d, e, el) {
     case 'appno': await api.decideApplication(+d.id, false); await after(); break;
     case 'uact': await api.adminUserAction(d.id, d.a); await after(); break;
     case 'evdel': await api.deleteEvent(+d.id); await after(); break;
+    case 'paintdel': await api.deletePaint(+d.id); S.paints = await api.loadColors(); await after(L('Paint removed.', 'Lack entfernt.')); break;
   }
 }
 document.addEventListener('click', e => {
@@ -568,8 +605,9 @@ document.addEventListener('change', e => {
   const run = p => p.catch(err => { console.error(err); toast(errMsg(err)); });
   if (t.id === 'fb') { S.f.brand = t.value; S.f.model = ''; render(); }
   else if (t.id === 'fm') { S.f.model = t.value; render(); }
-  else if (t.id === 'fs') { S.f.sort = t.value; render(); }
   else if (t.name === 'kind') { S.up.kind = t.value; const a = $('#archkind'); if (a) a.hidden = t.value !== 'archive'; }
+  else if (t.id === 'um') { const pk = $('#paintpick'); if (pk) pk.innerHTML = paintPicker(t.value, '', ''); }
+  else if (t.name === 'paint') { const w = $('#famwrap'); if (w) w.hidden = t.value !== ''; }
   else if (t.id === 'files') {
     [...t.files].filter(f => f.type.indexOf('image/') === 0).forEach(f => S.up.files.push({ file: f, url: URL.createObjectURL(f) }));
     t.value = ''; S.errUp = ''; const p = $('#prev'); if (p) p.innerHTML = prevHTML(); const er = $('#uerr'); if (er) er.textContent = '';
@@ -601,6 +639,7 @@ async function submit(f) {
       } else { await api.signIn(email, pw); S.modal = null; }
       break;
     }
+    case 'search': { const r = $('#reg'); if (r) r.scrollIntoView(); break; }
     case 'comment': {
       const body = String(v.get('text') || '').trim(); if (!body) return;
       await api.postComment(+S.arg, S.me.id, body);
@@ -613,8 +652,8 @@ async function submit(f) {
     }
     case 'edit': {
       const m = S.modal, s = m.spot, ch = { spot_id: s.id, user_id: S.me.id };
-      const c = v.get('color'), dd = +v.get('district'), p = String(v.get('prod') || '').trim(), ar = String(v.get('arch') || '');
-      if (c !== s.color) ch.color = c;
+      const pc = pickColor(s.model_id, v), dd = +v.get('district'), p = String(v.get('prod') || '').trim(), ar = String(v.get('arch') || '');
+      if (!pc.err) { if (pc.color !== s.color) ch.color = pc.color; if (pc.paint && pc.paint !== s.paint) ch.paint = pc.paint; }
       if (dd !== s.district) ch.district = dd;
       if (p && p !== (m.prod || '')) ch.prod_no = p;
       if (ar) ch.arch_kind = ar;
@@ -628,8 +667,8 @@ async function submit(f) {
     }
     case 'modelok': {
       const m = S.modal;
-      await api.approveModelRequest(m.id, String(v.get('brand')).trim(), String(v.get('name')).trim(), String(v.get('shape')));
-      S.modal = null; S.models = await api.loadModels(); await after(L('Model added.', 'Modell aufgenommen.')); break;
+      await api.approveModelRequest(m.id, String(v.get('brand')).trim(), String(v.get('name')).trim());
+      S.modal = null; S.models = await api.loadModels(); S.paints = await api.loadColors().catch(() => ({})); await after(L('Model added.', 'Modell aufgenommen.')); break;
     }
     case 'profile': {
       const un = String(v.get('username') || '').trim().toLowerCase(), er = $('#perr');
@@ -646,20 +685,28 @@ async function submit(f) {
     }
     case 'upload': {
       if (S.up.busy) return;
-      const model = v.get('model'), color = v.get('color'), dist = +v.get('district');
+      const model = v.get('model'), pc = model ? pickColor(model, v) : { err: 1 }, dist = +v.get('district');
       let err = '';
       if (!model) err = L('Choose a model.', 'Wähle ein Modell.');
-      else if (!color) err = L('Choose a colour.', 'Wähle eine Farbe.');
+      else if (pc.err) err = L('Choose a paint or a colour.', 'Wähle einen Lack oder eine Farbe.');
       else if (!dist) err = L('Choose a district.', 'Wähle einen Bezirk.');
       else if (!S.up.files.length) err = L('Add at least one photo.', 'Füge mindestens ein Foto hinzu.');
       else if (v.get('prod') && !/^\d{1,4}$/.test(String(v.get('prod')).trim())) err = L('The production number must be digits only.', 'Die Produktionsnummer darf nur Ziffern enthalten.');
       if (err) { S.errUp = err; const el = $('#uerr'); el.textContent = err; el.scrollIntoView({ block: 'center' }); return; }
       S.up.busy = true; $('#usend').disabled = true;
       const kind = v.get('kind') === 'archive' ? 'archive' : 'registry';
-      await api.uploadSpot(S.me.id, { model_id: model, color, district: dist, kind, arch_kind: v.get('arch'), prod_no: String(v.get('prod') || '').trim(), files: S.up.files.map(x => x.file) },
+      await api.uploadSpot(S.me.id, { model_id: model, color: pc.color, paint: pc.paint, district: dist, kind, arch_kind: v.get('arch'), prod_no: String(v.get('prod') || '').trim(), files: S.up.files.map(x => x.file) },
         (i, n) => { const p = $('#uprog'); if (p) p.textContent = L(`Uploading photo ${i} of ${n}…`, `Foto ${i} von ${n} wird hochgeladen …`); });
       S.up.files = []; S.up.busy = false; S.errUp = '';
       bust(); await refreshNotes(); toast(L('Sent for review.', 'Zur Prüfung gesendet.')); go('profile-' + S.me.username); break;
+    }
+    case 'paint': {
+      const name = String(v.get('name') || '').trim(), hex = String(v.get('hex') || '').trim(), er = $('#perr2');
+      if (name.length < 2 || name.length > 60) { er.textContent = L('Enter the paint name (2 to 60 characters).', 'Gib den Lacknamen an (2 bis 60 Zeichen).'); return; }
+      if (!/^#[0-9a-fA-F]{6}$/.test(hex)) { er.textContent = L('The swatch needs a hex colour like #C8102E.', 'Die Farbfläche braucht einen Hex-Wert wie #C8102E.'); return; }
+      try { await api.addPaint({ model_id: v.get('model'), name, family: v.get('family'), hex: hex.toUpperCase() }); }
+      catch (err) { er.textContent = errMsg(err); return; }
+      S.paints = await api.loadColors(); await after(L('Paint added.', 'Lack hinzugefügt.')); break;
     }
     case 'apply': {
       const w = String(v.get('why') || '').trim(), k = String(v.get('know') || '').trim();
@@ -684,6 +731,7 @@ async function init() {
   if (!S.configured) { render(); return; }
   try {
     S.models = await api.loadModels();
+    S.paints = await api.loadColors().catch(() => ({}));
     await refreshMe();
   } catch (e) { console.error(e); }
   api.onAuth((evt, session) => {
