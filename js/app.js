@@ -1,7 +1,7 @@
 // Vienna Car Registry – Oberfläche
-import * as api from './api.js?v=5';
+import * as api from './api.js?v=6';
 import { OAUTH_PROVIDERS } from './config.js';
-import { COLORS, BEZ, distLabel, esc } from './art.js?v=5';
+import { COLORS, BEZ, distLabel, esc } from './art.js?v=6';
 
 /* ---------- Helfer ---------- */
 const $ = (s, r) => (r || document).querySelector(s);
