@@ -8,7 +8,7 @@ The site is plain HTML, CSS and JavaScript (no build step). It runs on GitHub Pa
 
 ## What it does
 
-- Home page, search page and car page laid out after exclusivecarregistry.com: floating header, big title with search and numbers, Most Popular, Latest Events, Explore by make and model, category tiles, filters by make, model and colour on the Cars page, photo gallery and Details/Specifics panel on the car page
+- Home page, search page and car page in the classic registry layout, with its own look (night blue and Schönbrunn yellow, Josefin Sans and Manrope, pill shapes): floating header, big title with search and numbers, Most Popular, Latest Events, Explore by make and model, category tiles, filters by make, model and colour on the Cars page, photo gallery and Details/Specifics panel on the car page
 - Car page with several photos; guests see photos, paint and district, members see the full details with the source of the technical data
 - Official manufacturer paint names (for example Rosso Corsa) instead of a bare colour; the colour family is kept for filtering
 - Only real photos: there are no generated or demo cars
@@ -19,7 +19,7 @@ The site is plain HTML, CSS and JavaScript (no build step). It runs on GitHub Pa
 - Events (admins only), model requests, admin applications (the CEO decides)
 - Vienna Archives for Pro members: ex-Viennese cars, visitors from abroad, event cars
 - Ranking by approved uploads
-- English and German, light mode (default, like the reference) and dark mode, minimum age 12
+- English and German, dark mode (default) and light mode, minimum age 12
 
 ## Folder layout
 

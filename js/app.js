@@ -1,7 +1,7 @@
 // Vienna Car Registry – Oberfläche
-import * as api from './api.js?v=2';
+import * as api from './api.js?v=3';
 import { OAUTH_PROVIDERS } from './config.js';
-import { COLORS, BEZ, distLabel, esc } from './art.js?v=2';
+import { COLORS, BEZ, distLabel, esc } from './art.js?v=3';
 
 /* ---------- Helfer ---------- */
 const $ = (s, r) => (r || document).querySelector(s);
@@ -10,7 +10,7 @@ const pad = n => String(n).padStart(4, '0');
 
 const S = {
   lang: LS('vcr-lang') === 'de' ? 'de' : 'en',
-  theme: LS('vcr-theme') === 'dark' ? 'dark' : 'light',
+  theme: LS('vcr-theme') === 'light' ? 'light' : 'dark',
   configured: false, route: 'home', arg: '', pi: 0, tok: 0,
   me: null, status: null, models: [], specs: {}, paints: {},
   likes: new Set(), favs: new Set(), following: new Set(), blocked: new Set(), notes: [],
