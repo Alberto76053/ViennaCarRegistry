@@ -1,0 +1,706 @@
+-- =====================================================================
+-- Vienna Car Registry – Datenbank für Supabase
+-- Einfügen im Supabase-Dashboard unter "SQL Editor" und mit "Run" ausführen.
+-- Das Skript ist für ein neues, leeres Projekt gedacht.
+-- =====================================================================
+
+-- ---------------------------------------------------------------------
+-- 1. Tabellen
+-- ---------------------------------------------------------------------
+
+create table public.profiles (
+  id          uuid primary key references auth.users(id) on delete cascade,
+  username    text not null unique check (username ~ '^[a-z0-9_]{3,20}$'),
+  bio         text not null default '' check (char_length(bio) <= 300),
+  avatar_path text,
+  role        text not null default 'member' check (role in ('member','admin','ceo')),
+  is_pro      boolean not null default false,
+  created_at  timestamptz not null default now()
+);
+
+-- Verwarnungen und Sperren (nur für die Person selbst und Admins sichtbar)
+create table public.user_status (
+  user_id  uuid primary key references public.profiles(id) on delete cascade,
+  warnings int not null default 0,
+  banned   boolean not null default false
+);
+
+-- Modelle, die es im Register gibt (anfangs nur wenige, Admins nehmen weitere auf)
+create table public.models (
+  id    text primary key,
+  brand text not null,
+  name  text not null,
+  shape text not null default 'wedge' check (shape in ('coupe','wedge','spyder'))
+);
+
+-- Technische Daten: nur mit Account sichtbar
+create table public.model_specs (
+  model_id     text primary key references public.models(id) on delete cascade,
+  year         text,
+  engine       text,
+  power        text,
+  transmission text,
+  drive        text,
+  production   int
+);
+
+create table public.spots (
+  id          bigint generated always as identity primary key,
+  user_id     uuid not null references public.profiles(id) on delete cascade,
+  model_id    text not null references public.models(id),
+  color       text not null check (color in ('yellow','red','black','white','silver','blue','orange','green','grey')),
+  district    int  not null check (district between 1 and 23),
+  kind        text not null default 'registry' check (kind in ('registry','archive')),
+  arch_kind   text check (arch_kind in ('ex','visit','event')),
+  status      text not null default 'pending' check (status in ('pending','approved','rejected')),
+  created_at  timestamptz not null default now(),
+  approved_at timestamptz,
+  check ((kind = 'archive') = (arch_kind is not null))
+);
+create index spots_status_idx on public.spots (status, kind, approved_at desc);
+create index spots_user_idx   on public.spots (user_id);
+
+-- Details, die Gäste nicht sehen: Produktionsnummer, Datum
+create table public.spot_details (
+  spot_id    bigint primary key references public.spots(id) on delete cascade,
+  prod_no    text check (prod_no ~ '^[0-9]{1,4}$'),
+  spotted_on date not null default current_date
+);
+
+create table public.spot_photos (
+  id       bigint generated always as identity primary key,
+  spot_id  bigint not null references public.spots(id) on delete cascade,
+  path     text not null,
+  position int not null default 0
+);
+create index spot_photos_spot_idx on public.spot_photos (spot_id, position);
+
+create table public.likes (
+  user_id uuid   not null references public.profiles(id) on delete cascade,
+  spot_id bigint not null references public.spots(id) on delete cascade,
+  primary key (user_id, spot_id)
+);
+
+create table public.favorites (
+  user_id uuid   not null references public.profiles(id) on delete cascade,
+  spot_id bigint not null references public.spots(id) on delete cascade,
+  primary key (user_id, spot_id)
+);
+
+create table public.follows (
+  follower_id uuid not null references public.profiles(id) on delete cascade,
+  followee_id uuid not null references public.profiles(id) on delete cascade,
+  primary key (follower_id, followee_id),
+  check (follower_id <> followee_id)
+);
+
+create table public.blocks (
+  blocker_id uuid not null references public.profiles(id) on delete cascade,
+  blocked_id uuid not null references public.profiles(id) on delete cascade,
+  primary key (blocker_id, blocked_id),
+  check (blocker_id <> blocked_id)
+);
+
+create table public.comments (
+  id         bigint generated always as identity primary key,
+  spot_id    bigint not null references public.spots(id) on delete cascade,
+  user_id    uuid   not null references public.profiles(id) on delete cascade,
+  body       text   not null check (char_length(body) between 1 and 400),
+  filtered   boolean not null default false,
+  created_at timestamptz not null default now()
+);
+create index comments_spot_idx on public.comments (spot_id, created_at);
+
+create table public.reports (
+  id          bigint generated always as identity primary key,
+  reporter_id uuid   not null references public.profiles(id) on delete cascade,
+  spot_id     bigint not null references public.spots(id) on delete cascade,
+  comment_id  bigint references public.comments(id) on delete cascade,
+  reason      text   not null check (reason in ('wrong','inappropriate','spam','private')),
+  note        text   not null default '' check (char_length(note) <= 300),
+  created_at  timestamptz not null default now()
+);
+
+-- Änderungswünsche von Usern; gelten erst nach Freigabe durch einen Admin
+create table public.spot_edits (
+  id         bigint generated always as identity primary key,
+  spot_id    bigint not null references public.spots(id) on delete cascade,
+  user_id    uuid   not null references public.profiles(id) on delete cascade,
+  color      text check (color in ('yellow','red','black','white','silver','blue','orange','green','grey')),
+  district   int  check (district between 1 and 23),
+  prod_no    text check (prod_no ~ '^[0-9]{1,4}$'),
+  arch_kind  text check (arch_kind in ('ex','visit','event')),   -- gesetzt = Aufnahme ins Archiv anfragen
+  created_at timestamptz not null default now()
+);
+
+create table public.model_requests (
+  id         bigint generated always as identity primary key,
+  user_id    uuid not null references public.profiles(id) on delete cascade,
+  text       text not null check (char_length(text) between 2 and 60),
+  created_at timestamptz not null default now()
+);
+
+create table public.admin_applications (
+  id         bigint generated always as identity primary key,
+  user_id    uuid not null unique references public.profiles(id) on delete cascade,
+  why        text not null check (char_length(why) >= 30),
+  knowledge  text not null check (char_length(knowledge) >= 30),
+  created_at timestamptz not null default now()
+);
+
+create table public.events (
+  id          bigint generated always as identity primary key,
+  title       text not null check (char_length(title) between 2 and 120),
+  starts_on   date not null,
+  place       text not null default '',
+  district    int check (district between 1 and 23),
+  description text not null default '',
+  created_at  timestamptz not null default now()
+);
+
+create table public.messages (
+  id           bigint generated always as identity primary key,
+  sender_id    uuid not null references public.profiles(id) on delete cascade,
+  recipient_id uuid not null references public.profiles(id) on delete cascade,
+  body         text not null check (char_length(body) between 1 and 500),
+  created_at   timestamptz not null default now(),
+  check (sender_id <> recipient_id)
+);
+create index messages_pair_idx on public.messages (sender_id, recipient_id, created_at);
+
+create table public.notifications (
+  id         bigint generated always as identity primary key,
+  user_id    uuid not null references public.profiles(id) on delete cascade,
+  text_en    text not null,
+  text_de    text not null,
+  read       boolean not null default false,
+  created_at timestamptz not null default now()
+);
+create index notifications_user_idx on public.notifications (user_id, created_at desc);
+
+-- Dream Garage: 3 Plätze am Anfang, alle 5 freigegebenen Uploads einer mehr
+create table public.garage (
+  user_id  uuid not null references public.profiles(id) on delete cascade,
+  slot     int  not null check (slot >= 0),
+  model_id text not null references public.models(id),
+  primary key (user_id, slot)
+);
+
+-- Wörter, die in Kommentaren gefiltert werden (Admins pflegen sie im Table Editor)
+create table public.bad_words (
+  word text primary key
+);
+
+-- ---------------------------------------------------------------------
+-- 2. Hilfsfunktionen
+-- ---------------------------------------------------------------------
+
+create or replace function public.is_admin() returns boolean
+language sql stable security definer set search_path = public as $$
+  select coalesce((select role in ('admin','ceo') from public.profiles where id = auth.uid()), false)
+$$;
+
+create or replace function public.is_ceo() returns boolean
+language sql stable security definer set search_path = public as $$
+  select coalesce((select role = 'ceo' from public.profiles where id = auth.uid()), false)
+$$;
+
+-- Pro-Mitglieder und Admins dürfen das Archiv sehen
+create or replace function public.is_pro_user() returns boolean
+language sql stable security definer set search_path = public as $$
+  select coalesce((select is_pro or role in ('admin','ceo') from public.profiles where id = auth.uid()), false)
+$$;
+
+create or replace function public.is_banned() returns boolean
+language sql stable security definer set search_path = public as $$
+  select coalesce((select banned from public.user_status where user_id = auth.uid()), false)
+$$;
+
+create or replace function public.is_blocked_between(a uuid, b uuid) returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from public.blocks
+    where (blocker_id = a and blocked_id = b) or (blocker_id = b and blocked_id = a)
+  )
+$$;
+
+create or replace function public.garage_slots(uid uuid) returns int
+language sql stable security definer set search_path = public as $$
+  select 3 + (select count(*)::int from public.spots where user_id = uid and status = 'approved') / 5
+$$;
+
+-- Interne Funktionen (nicht von außen aufrufbar)
+create or replace function public.notify(uid uuid, en text, de text) returns void
+language sql security definer set search_path = public as $$
+  insert into public.notifications (user_id, text_en, text_de) values (uid, en, de)
+$$;
+
+create or replace function public.add_warning(uid uuid) returns void
+language plpgsql security definer set search_path = public as $$
+declare n int;
+begin
+  update public.user_status
+     set warnings = warnings + 1,
+         banned   = banned or (warnings + 1 >= 3)
+   where user_id = uid
+   returning warnings into n;
+  if n is null then return; end if;
+  if n >= 3 then
+    perform public.notify(uid, 'Your account is suspended after three warnings.',
+                               'Dein Konto ist nach drei Verwarnungen gesperrt.');
+  else
+    perform public.notify(uid, format('Warning %s of 3: please keep comments respectful.', n),
+                               format('Verwarnung %s von 3: Bitte bleib in Kommentaren respektvoll.', n));
+  end if;
+end $$;
+
+revoke all on function public.notify(uuid, text, text) from public, anon, authenticated;
+revoke all on function public.add_warning(uuid)        from public, anon, authenticated;
+
+-- ---------------------------------------------------------------------
+-- 3. Trigger
+-- ---------------------------------------------------------------------
+
+-- Neuer Account -> Profil anlegen
+create or replace function public.handle_new_user() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare base text; uname text;
+begin
+  base := lower(regexp_replace(
+            coalesce(nullif(new.raw_user_meta_data->>'username', ''), split_part(coalesce(new.email, ''), '@', 1)),
+            '[^a-zA-Z0-9_]', '', 'g'));
+  base := left(base, 14);
+  if char_length(base) < 3 then base := 'spotter'; end if;
+  uname := base;
+  while exists (select 1 from public.profiles where username = uname) loop
+    uname := base || substr(md5(random()::text), 1, 5);
+  end loop;
+  insert into public.profiles (id, username) values (new.id, uname);
+  insert into public.user_status (user_id) values (new.id);
+  perform public.notify(new.id, 'Welcome! Add your first spot to start your Dream Garage.',
+                                'Willkommen! Lade deinen ersten Spot hoch, um deine Dream Garage zu füllen.');
+  return new;
+end $$;
+
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute function public.handle_new_user();
+
+-- Rolle und Pro-Status dürfen User nicht selbst ändern
+create or replace function public.guard_profile() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if auth.uid() is null then return new; end if;   -- SQL Editor / Dashboard
+  if new.id is distinct from old.id then raise exception 'id kann nicht geändert werden'; end if;
+  if new.role is distinct from old.role and not public.is_ceo() then
+    raise exception 'Nur der CEO darf Rollen ändern' using errcode = '42501';
+  end if;
+  if new.is_pro is distinct from old.is_pro and not public.is_admin() then
+    raise exception 'Nur Admins dürfen den Pro-Status ändern' using errcode = '42501';
+  end if;
+  return new;
+end $$;
+
+create trigger guard_profile before update on public.profiles
+  for each row execute function public.guard_profile();
+
+-- Kommentare filtern; gefilterte Kommentare geben eine Verwarnung, nach 3 wird gesperrt
+create or replace function public.filter_comment() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare w text; cleaned text;
+begin
+  if exists (select 1 from public.user_status where user_id = new.user_id and banned) then
+    raise exception 'Dein Konto ist gesperrt.' using errcode = '42501';
+  end if;
+  cleaned := new.body;
+  for w in select word from public.bad_words loop
+    cleaned := regexp_replace(cleaned,
+                 '\m' || regexp_replace(w, '([.*+?^${}()|\[\]\\])', '\\\1', 'g') || '\w*',
+                 '•••', 'gi');
+  end loop;
+  if cleaned <> new.body then
+    new.body := cleaned;
+    new.filtered := true;
+    perform public.add_warning(new.user_id);
+  end if;
+  return new;
+end $$;
+
+create trigger filter_comment before insert on public.comments
+  for each row execute function public.filter_comment();
+
+-- Neuer Spot -> Hinweis an den Ersteller; Freigabe/Ablehnung -> Hinweis
+create or replace function public.spots_after_insert() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare mname text; pro boolean;
+begin
+  select brand || ' ' || name into mname from public.models where id = new.model_id;
+  select is_pro into pro from public.profiles where id = new.user_id;
+  perform public.notify(new.user_id,
+    format('Your spot (%s) is waiting for review.%s', mname, case when pro then ' Pro: reviewed first.' else '' end),
+    format('Dein Spot (%s) wartet auf Freigabe.%s',   mname, case when pro then ' Pro: wird zuerst geprüft.' else '' end));
+  return new;
+end $$;
+
+create trigger spots_after_insert after insert on public.spots
+  for each row execute function public.spots_after_insert();
+
+create or replace function public.spots_before_update() returns trigger
+language plpgsql as $$
+begin
+  if new.status = 'approved' and old.status is distinct from 'approved' then
+    new.approved_at := now();
+  end if;
+  return new;
+end $$;
+
+create trigger spots_before_update before update on public.spots
+  for each row execute function public.spots_before_update();
+
+create or replace function public.spots_after_update() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare mname text;
+begin
+  if new.status is distinct from old.status and new.status in ('approved','rejected') then
+    select brand || ' ' || name into mname from public.models where id = new.model_id;
+    if new.status = 'approved' then
+      perform public.notify(new.user_id, format('Your spot (%s) was approved.', mname),
+                                         format('Dein Spot (%s) wurde freigegeben.', mname));
+    else
+      perform public.notify(new.user_id, format('Your spot (%s) was not accepted.', mname),
+                                         format('Dein Spot (%s) wurde nicht angenommen.', mname));
+    end if;
+  end if;
+  return new;
+end $$;
+
+create trigger spots_after_update after update on public.spots
+  for each row execute function public.spots_after_update();
+
+-- Dream Garage: nicht mehr Plätze als freigeschaltet
+create or replace function public.garage_guard() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if new.slot >= public.garage_slots(new.user_id) then
+    raise exception 'Dieser Platz ist noch nicht freigeschaltet' using errcode = '42501';
+  end if;
+  return new;
+end $$;
+
+create trigger garage_guard before insert on public.garage
+  for each row execute function public.garage_guard();
+
+-- ---------------------------------------------------------------------
+-- 4. Admin-Funktionen (prüfen selbst, ob der Aufrufer Admin ist)
+-- ---------------------------------------------------------------------
+
+create or replace function public.apply_edit(edit_id bigint) returns void
+language plpgsql security definer set search_path = public as $$
+declare e record;
+begin
+  if not public.is_admin() then raise exception 'Nur für Admins' using errcode = '42501'; end if;
+  select * into e from public.spot_edits where id = edit_id;
+  if not found then return; end if;
+  update public.spots set
+      color     = coalesce(e.color, color),
+      district  = coalesce(e.district, district),
+      kind      = case when e.arch_kind is not null then 'archive' else kind end,
+      arch_kind = coalesce(e.arch_kind, arch_kind)
+    where id = e.spot_id;
+  if e.prod_no is not null then
+    update public.spot_details set prod_no = e.prod_no where spot_id = e.spot_id;
+  end if;
+  delete from public.spot_edits where id = edit_id;
+  perform public.notify(e.user_id, 'Your edit was approved.', 'Deine Änderung wurde freigegeben.');
+end $$;
+
+create or replace function public.reject_edit(edit_id bigint) returns void
+language plpgsql security definer set search_path = public as $$
+declare e record;
+begin
+  if not public.is_admin() then raise exception 'Nur für Admins' using errcode = '42501'; end if;
+  delete from public.spot_edits where id = edit_id returning * into e;
+  if found then
+    perform public.notify(e.user_id, 'Your edit was not accepted.', 'Deine Änderung wurde nicht angenommen.');
+  end if;
+end $$;
+
+create or replace function public.approve_model_request(req_id bigint, p_brand text, p_name text, p_shape text default 'wedge')
+returns void language plpgsql security definer set search_path = public as $$
+declare r record; slug text;
+begin
+  if not public.is_admin() then raise exception 'Nur für Admins' using errcode = '42501'; end if;
+  select * into r from public.model_requests where id = req_id;
+  if not found then return; end if;
+  slug := lower(regexp_replace(p_brand || '-' || p_name, '[^a-zA-Z0-9]+', '-', 'g'));
+  insert into public.models (id, brand, name, shape) values (slug, p_brand, p_name, p_shape)
+    on conflict (id) do nothing;
+  insert into public.model_specs (model_id) values (slug) on conflict do nothing;
+  delete from public.model_requests where id = req_id;
+  perform public.notify(r.user_id, format('Model added: %s %s', p_brand, p_name),
+                                   format('Modell aufgenommen: %s %s', p_brand, p_name));
+end $$;
+
+create or replace function public.decline_model_request(req_id bigint) returns void
+language plpgsql security definer set search_path = public as $$
+declare r record;
+begin
+  if not public.is_admin() then raise exception 'Nur für Admins' using errcode = '42501'; end if;
+  delete from public.model_requests where id = req_id returning * into r;
+  if found then
+    perform public.notify(r.user_id, format('Your model request was declined: %s', r.text),
+                                     format('Deine Modell-Anfrage wurde abgelehnt: %s', r.text));
+  end if;
+end $$;
+
+-- remove = true: Spot ablehnen bzw. Kommentar löschen (+ Verwarnung); false: Meldung verwerfen
+create or replace function public.resolve_report(rep_id bigint, remove boolean) returns void
+language plpgsql security definer set search_path = public as $$
+declare r record; cuser uuid;
+begin
+  if not public.is_admin() then raise exception 'Nur für Admins' using errcode = '42501'; end if;
+  select * into r from public.reports where id = rep_id;
+  if not found then return; end if;
+  if remove then
+    if r.comment_id is not null then
+      select user_id into cuser from public.comments where id = r.comment_id;
+      delete from public.comments where id = r.comment_id;
+      if cuser is not null then perform public.add_warning(cuser); end if;
+    else
+      update public.spots set status = 'rejected' where id = r.spot_id;
+    end if;
+  end if;
+  delete from public.reports where id = rep_id;
+end $$;
+
+-- Nur der CEO entscheidet über Admin-Bewerbungen
+create or replace function public.decide_application(app_id bigint, accept boolean) returns void
+language plpgsql security definer set search_path = public as $$
+declare a record;
+begin
+  if not public.is_ceo() then raise exception 'Nur der CEO entscheidet über Bewerbungen' using errcode = '42501'; end if;
+  select * into a from public.admin_applications where id = app_id;
+  if not found then return; end if;
+  if accept then
+    update public.profiles set role = 'admin' where id = a.user_id and role = 'member';
+    perform public.notify(a.user_id, 'You are now an admin. Welcome to the team!', 'Du bist jetzt Admin. Willkommen im Team!');
+  else
+    perform public.notify(a.user_id, 'Your admin application was declined.', 'Deine Admin-Bewerbung wurde abgelehnt.');
+  end if;
+  delete from public.admin_applications where id = app_id;
+end $$;
+
+-- action: pro_on | pro_off | ban | unban | reset_warnings
+create or replace function public.admin_user_action(uid uuid, action text) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if not public.is_admin() then raise exception 'Nur für Admins' using errcode = '42501'; end if;
+  if action = 'pro_on' then
+    update public.profiles set is_pro = true where id = uid;
+  elsif action = 'pro_off' then
+    update public.profiles set is_pro = false where id = uid;
+  elsif action = 'ban' then
+    update public.user_status set banned = true where user_id = uid;
+  elsif action = 'unban' then
+    update public.user_status set banned = false, warnings = 0 where user_id = uid;
+  elsif action = 'reset_warnings' then
+    update public.user_status set warnings = 0 where user_id = uid;
+  else
+    raise exception 'Unbekannte Aktion %', action;
+  end if;
+end $$;
+
+-- ---------------------------------------------------------------------
+-- 5. Ansichten (nur Zahlen, keine privaten Daten)
+-- ---------------------------------------------------------------------
+
+create or replace view public.spot_stats as
+  select s.id as spot_id,
+         (select count(*) from public.likes l    where l.spot_id = s.id)::int as likes,
+         (select count(*) from public.comments c where c.spot_id = s.id)::int as comments
+    from public.spots s
+   where s.status = 'approved';
+
+create or replace view public.profile_stats as
+  select p.id as user_id, p.username, p.is_pro, p.role,
+         (select count(*) from public.spots s   where s.user_id = p.id and s.status = 'approved')::int as uploads,
+         (select count(*) from public.follows f where f.followee_id = p.id)::int as followers
+    from public.profiles p;
+
+grant select on public.spot_stats, public.profile_stats to anon, authenticated;
+
+-- ---------------------------------------------------------------------
+-- 6. Zugriffsregeln (Row Level Security)
+-- ---------------------------------------------------------------------
+
+alter table public.profiles           enable row level security;
+alter table public.user_status        enable row level security;
+alter table public.models             enable row level security;
+alter table public.model_specs        enable row level security;
+alter table public.spots              enable row level security;
+alter table public.spot_details       enable row level security;
+alter table public.spot_photos        enable row level security;
+alter table public.likes              enable row level security;
+alter table public.favorites          enable row level security;
+alter table public.follows            enable row level security;
+alter table public.blocks             enable row level security;
+alter table public.comments           enable row level security;
+alter table public.reports            enable row level security;
+alter table public.spot_edits         enable row level security;
+alter table public.model_requests     enable row level security;
+alter table public.admin_applications enable row level security;
+alter table public.events             enable row level security;
+alter table public.messages           enable row level security;
+alter table public.notifications      enable row level security;
+alter table public.garage             enable row level security;
+alter table public.bad_words          enable row level security;
+
+-- profiles: öffentlich lesbar, jede Person ändert nur ihr eigenes Profil
+create policy profiles_read   on public.profiles for select using (true);
+create policy profiles_update on public.profiles for update to authenticated
+  using (id = auth.uid()) with check (id = auth.uid());
+
+-- user_status: nur man selbst und Admins; geschrieben wird nur über Trigger und Admin-Funktionen
+create policy user_status_read on public.user_status for select to authenticated
+  using (user_id = auth.uid() or public.is_admin());
+
+-- Modelle: für alle sichtbar, technische Daten nur mit Account, ändern nur Admins
+create policy models_read  on public.models for select using (true);
+create policy models_admin on public.models for all to authenticated
+  using (public.is_admin()) with check (public.is_admin());
+create policy specs_read   on public.model_specs for select to authenticated using (true);
+create policy specs_admin  on public.model_specs for all to authenticated
+  using (public.is_admin()) with check (public.is_admin());
+
+-- spots: Freigegebene Spots sieht jeder, das Archiv nur Pro/Admins; eigene Spots immer
+create policy spots_read on public.spots for select using (
+  user_id = auth.uid()
+  or public.is_admin()
+  or (status = 'approved' and (kind = 'registry' or public.is_pro_user()))
+);
+create policy spots_insert on public.spots for insert to authenticated
+  with check (user_id = auth.uid() and status = 'pending' and approved_at is null and not public.is_banned());
+create policy spots_update on public.spots for update to authenticated
+  using (public.is_admin()) with check (public.is_admin());
+create policy spots_delete on public.spots for delete to authenticated
+  using (public.is_admin() or (user_id = auth.uid() and status = 'pending'));
+
+create policy details_read on public.spot_details for select to authenticated
+  using (exists (select 1 from public.spots s where s.id = spot_id));
+create policy details_insert on public.spot_details for insert to authenticated
+  with check (exists (select 1 from public.spots s where s.id = spot_id and s.user_id = auth.uid() and s.status = 'pending'));
+
+create policy photos_read on public.spot_photos for select
+  using (exists (select 1 from public.spots s where s.id = spot_id));
+create policy photos_insert on public.spot_photos for insert to authenticated
+  with check (exists (select 1 from public.spots s where s.id = spot_id and s.user_id = auth.uid() and s.status = 'pending'));
+
+-- likes, favorites: nur eigene Zeilen
+create policy likes_own on public.likes for all to authenticated
+  using (user_id = auth.uid())
+  with check (user_id = auth.uid() and exists (select 1 from public.spots s where s.id = spot_id));
+create policy favorites_own on public.favorites for all to authenticated
+  using (user_id = auth.uid())
+  with check (user_id = auth.uid() and exists (select 1 from public.spots s where s.id = spot_id));
+
+-- follows: öffentlich lesbar, folgen/entfolgen nur selbst
+create policy follows_read on public.follows for select using (true);
+create policy follows_insert on public.follows for insert to authenticated with check (follower_id = auth.uid());
+create policy follows_delete on public.follows for delete to authenticated using (follower_id = auth.uid());
+
+-- blocks: nur eigene
+create policy blocks_own on public.blocks for all to authenticated
+  using (blocker_id = auth.uid()) with check (blocker_id = auth.uid());
+
+-- comments: nur mit Account lesbar; schreiben nur wer nicht gesperrt ist
+create policy comments_read on public.comments for select to authenticated
+  using (exists (select 1 from public.spots s where s.id = spot_id));
+create policy comments_insert on public.comments for insert to authenticated
+  with check (user_id = auth.uid() and not public.is_banned()
+              and exists (select 1 from public.spots s where s.id = spot_id and s.status = 'approved'));
+create policy comments_delete on public.comments for delete to authenticated
+  using (user_id = auth.uid() or public.is_admin());
+
+-- reports: jeder meldet, nur Admins lesen
+create policy reports_insert on public.reports for insert to authenticated
+  with check (reporter_id = auth.uid() and exists (select 1 from public.spots s where s.id = spot_id));
+create policy reports_admin on public.reports for select to authenticated using (public.is_admin());
+
+-- spot_edits: nur für den eigenen Spot
+create policy edits_insert on public.spot_edits for insert to authenticated
+  with check (user_id = auth.uid() and exists (select 1 from public.spots s where s.id = spot_id and s.user_id = auth.uid()));
+create policy edits_read on public.spot_edits for select to authenticated
+  using (user_id = auth.uid() or public.is_admin());
+
+create policy mreq_insert on public.model_requests for insert to authenticated with check (user_id = auth.uid());
+create policy mreq_read   on public.model_requests for select to authenticated
+  using (user_id = auth.uid() or public.is_admin());
+
+create policy apps_insert on public.admin_applications for insert to authenticated with check (user_id = auth.uid());
+create policy apps_read   on public.admin_applications for select to authenticated
+  using (user_id = auth.uid() or public.is_admin());
+
+-- Events: alle lesen, nur Admins pflegen (User können keine Events einreichen)
+create policy events_read  on public.events for select using (true);
+create policy events_admin on public.events for all to authenticated
+  using (public.is_admin()) with check (public.is_admin());
+
+-- Nachrichten: nur Absender und Empfänger; blockierte Personen können nicht schreiben
+create policy messages_read on public.messages for select to authenticated
+  using (sender_id = auth.uid() or recipient_id = auth.uid());
+create policy messages_insert on public.messages for insert to authenticated
+  with check (sender_id = auth.uid() and not public.is_banned()
+              and not public.is_blocked_between(sender_id, recipient_id));
+
+-- Benachrichtigungen: lesen und als gelesen markieren (nur die Spalte "read")
+create policy notes_read   on public.notifications for select to authenticated using (user_id = auth.uid());
+create policy notes_update on public.notifications for update to authenticated
+  using (user_id = auth.uid()) with check (user_id = auth.uid());
+revoke update on public.notifications from authenticated;
+grant  update (read) on public.notifications to authenticated;
+
+-- Dream Garage: für alle sichtbar, bearbeiten nur selbst
+create policy garage_read   on public.garage for select using (true);
+create policy garage_insert on public.garage for insert to authenticated with check (user_id = auth.uid());
+create policy garage_delete on public.garage for delete to authenticated using (user_id = auth.uid());
+
+-- bad_words: keine Policy = kein Zugriff über die API (Trigger lesen sie trotzdem)
+
+-- ---------------------------------------------------------------------
+-- 7. Foto-Speicher
+-- ---------------------------------------------------------------------
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types) values
+  ('spot-photos', 'spot-photos', true, 8388608, array['image/jpeg','image/png','image/webp']),
+  ('avatars',     'avatars',     true, 2097152, array['image/jpeg','image/png','image/webp'])
+on conflict (id) do nothing;
+
+-- Hochladen nur in den eigenen Ordner (<user-id>/datei.jpg)
+create policy "upload into own folder" on storage.objects for insert to authenticated
+  with check (bucket_id in ('spot-photos','avatars') and (storage.foldername(name))[1] = auth.uid()::text);
+
+-- ---------------------------------------------------------------------
+-- 8. Startdaten
+-- ---------------------------------------------------------------------
+
+-- Anfangs etwa 7 Modelle. Technische Daten bitte vor dem Start prüfen.
+insert into public.models (id, brand, name, shape) values
+  ('laferrari', 'Ferrari',       'LaFerrari',     'coupe'),
+  ('svj',       'Lamborghini',   'Aventador SVJ', 'wedge'),
+  ('p1',        'McLaren',       'P1',            'coupe'),
+  ('918',       'Porsche',       '918 Spyder',    'spyder'),
+  ('huayra',    'Pagani',        'Huayra',        'coupe'),
+  ('amgone',    'Mercedes-AMG',  'One',           'wedge'),
+  ('valkyrie',  'Aston Martin',  'Valkyrie',      'wedge');
+
+insert into public.model_specs (model_id, year, engine, power, transmission, drive, production) values
+  ('laferrari', '2013–2016', '6.3 L V12 + hybrid',            '963 PS',  '7-speed dual-clutch',       'RWD', 500),
+  ('svj',       '2018–2022', '6.5 L V12',                     '770 PS',  '7-speed ISR',               'AWD', 900),
+  ('p1',        '2013–2015', '3.8 L V8 twin-turbo + hybrid',  '916 PS',  '7-speed dual-clutch',       'RWD', 375),
+  ('918',       '2013–2015', '4.6 L V8 + hybrid',             '887 PS',  '7-speed PDK',               'AWD', 918),
+  ('huayra',    '2012–2020', '6.0 L V12 twin-turbo',          '730 PS',  '7-speed automated manual',  'RWD', 100),
+  ('amgone',    '2022–2023', '1.6 L V6 turbo + hybrid',       '1063 PS', '8-speed automated manual',  'AWD', 275),
+  ('valkyrie',  '2021–2024', '6.5 L V12 + hybrid',            '1160 PS', '7-speed automated manual',  'RWD', 150);
+
+insert into public.bad_words (word) values
+  ('idiot'), ('trottel'), ('arschloch'), ('scheiße'), ('scheisse'), ('fuck'), ('shit'), ('wichser');
