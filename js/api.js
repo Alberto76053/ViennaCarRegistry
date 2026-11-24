@@ -1,7 +1,7 @@
 // Alle Zugriffe auf Supabase an einer Stelle.
 // Die Zugriffsregeln selbst stehen in supabase/schema.sql (Row Level Security),
 // diese Datei fragt nur an und gibt die Antworten an die Oberfläche weiter.
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js?v=6';
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js?v=7';
 
 export const configured = /^https:\/\/[^/]+\.supabase\.(co|in)\/?$/.test(SUPABASE_URL) && SUPABASE_ANON_KEY.length > 20 && !SUPABASE_ANON_KEY.startsWith('DEIN');
 let sb = null;
@@ -32,6 +32,18 @@ export async function signOut() { await sb.auth.signOut(); }
 
 /* ---------- Grunddaten ---------- */
 export async function loadModels() { return ok(await sb.from('models').select('id,brand,name').order('brand').order('name')); }
+export async function loadGeo() {
+  const [r, d] = await Promise.all([
+    sb.from('regions').select('id,name,sort,active').order('sort'),
+    sb.from('districts').select('id,region_id,name,code,sort').order('sort')
+  ]);
+  return { regions: ok(r), districts: ok(d) };
+}
+// Bundesland freischalten oder sperren (nur die CEO-Rolle darf das, die Datenbank prüft es)
+export async function setRegionActive(id, active) {
+  const rows = ok(await sb.from('regions').update({ active }).eq('id', id).select('id'));
+  if (!rows.length) throw new Error('permission denied');
+}
 export async function loadColors() {
   const rows = ok(await sb.from('model_colors').select('*').order('id'));
   const map = {};
@@ -86,6 +98,14 @@ async function attach(spots, withStats = true) {
   return spots.map(s => ({ ...s, photos: photos[s.id] || [], likes: (stats[s.id] || {}).likes || 0, comments: (stats[s.id] || {}).comments || 0 }));
 }
 
+// Auto des Monats: meiste Likes im Monat (die Datenbank liefert die Auswahl)
+export async function loadCarOfMonth() {
+  const r = ok(await sb.from('car_of_month').select('*').maybeSingle());
+  if (!r) return null;
+  const spot = (await attach(ok(await sb.from('spots').select('*').eq('id', r.spot_id)), true))[0];
+  return spot ? { spot, likes: r.likes, month: r.month_start } : null;
+}
+
 export async function listSpots(kind) {
   const spots = ok(await sb.from('spots').select('*').eq('status', 'approved').eq('kind', kind).order('approved_at', { ascending: false }).limit(300));
   return attach(spots);
@@ -103,10 +123,14 @@ export async function getSpot(id) {
   ]);
   const comments = ok(cm), marks = ok(mk);
   const authors = await profilesByIds([s.user_id, ...comments.map(c => c.user_id), ...marks.map(m => m.user_id)]);
+  // Wer ist mit @name erwähnt? Nur echte Benutzernamen werden später zu Links.
+  const names = [...new Set(comments.flatMap(c => [...c.body.matchAll(/(?:^|[^A-Za-z0-9_])@([A-Za-z0-9_]{3,20})/g)].map(m => m[1].toLowerCase())))].slice(0, 30);
+  const mentions = {};
+  if (names.length) ok(await sb.from('profiles').select('username').in('username', names)).forEach(r => { mentions[r.username] = true; });
   const stats = ok(st) || {};
   return {
     spot: s, photos: ok(photos).map(p => photoUrl(p.path)), details: ok(det),
-    likes: stats.likes || 0, commentCount: comments.length, comments, marks, authors
+    likes: stats.likes || 0, commentCount: comments.length, comments, marks, authors, mentions
   };
 }
 
@@ -141,8 +165,10 @@ export async function setBlock(uid, other, on) {
   } else ok(await sb.from('blocks').delete().eq('blocker_id', uid).eq('blocked_id', other));
 }
 
-export async function postComment(spotId, uid, body) {
-  ok(await sb.from('comments').insert({ spot_id: spotId, user_id: uid, body }));
+export async function postComment(spotId, uid, body, parentId) {
+  const row = { spot_id: spotId, user_id: uid, body };
+  if (parentId) row.parent_id = parentId;
+  ok(await sb.from('comments').insert(row));
 }
 export async function sendReport(r) { ok(await sb.from('reports').insert(r)); }
 export async function sendEdit(e) { ok(await sb.from('spot_edits').insert(e)); }
@@ -193,12 +219,13 @@ export async function uploadSpot(uid, v, onProgress) {
 export async function profileByUsername(name) {
   const p = ok(await sb.from('profiles').select('*').eq('username', name).maybeSingle());
   if (!p) return null;
-  const [stats, garage, spots] = await Promise.all([
+  const [stats, garage, spots, badges] = await Promise.all([
     sb.from('profile_stats').select('*').eq('user_id', p.id).maybeSingle(),
     sb.from('garage').select('slot,model_id').eq('user_id', p.id).order('slot'),
-    listUserSpots(p.id)
+    listUserSpots(p.id),
+    sb.from('profile_badge_stats').select('*').eq('user_id', p.id).maybeSingle()
   ]);
-  return { profile: p, stats: ok(stats) || { uploads: 0, followers: 0 }, garage: ok(garage), spots };
+  return { profile: p, stats: ok(stats) || { uploads: 0, followers: 0 }, garage: ok(garage), spots, badgeStats: ok(badges) };
 }
 
 export async function updateProfile(uid, patch) { ok(await sb.from('profiles').update(patch).eq('id', uid)); }

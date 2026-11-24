@@ -1,7 +1,7 @@
 // Vienna Car Registry – Oberfläche
-import * as api from './api.js?v=6';
+import * as api from './api.js?v=7';
 import { OAUTH_PROVIDERS } from './config.js';
-import { COLORS, BEZ, distLabel, esc } from './art.js?v=6';
+import { COLORS, GEO, setGeo, wienOnly, distLabel, regionName, regionOf, esc } from './art.js?v=7';
 
 /* ---------- Helfer ---------- */
 const $ = (s, r) => (r || document).querySelector(s);
@@ -14,7 +14,7 @@ const S = {
   configured: false, route: 'home', arg: '', pi: 0, tok: 0,
   me: null, status: null, models: [], specs: {}, paints: {},
   likes: new Set(), favs: new Set(), following: new Set(), blocked: new Set(), notes: [],
-  f: { q: '', brand: '', model: '', color: '', sort: 'new', n: 24 }, menu: false, ptab: 'details', homeTab: 'likes', carPhotos: [],
+  f: { q: '', brand: '', model: '', color: '', region: '', sort: 'new', n: 24 }, menu: false, ptab: 'details', homeTab: 'likes', carPhotos: [],
   list: [], modal: null, authTab: 'in', adminTab: 'spots', notifOpen: false,
   msgWith: null, up: { files: [], kind: 'registry', busy: false }, errUp: '', applied: false,
   cache: new Map()
@@ -92,6 +92,31 @@ function av(p, size) {
   const sz = size || 36;
   return `<span class="av" style="--s:${sz}px;background:hsl(${hue(p.username)} 42% 40%)">${p.avatar_path ? `<img src="${esc(api.photoUrl(p.avatar_path, 'avatars'))}" alt="">` : esc((p.username || '?')[0].toUpperCase())}</span>`;
 }
+const MENTION = /(^|[^A-Za-z0-9_])@([A-Za-z0-9_]{3,20})/g;
+const mentionHTML = (body, known) => esc(body).replace(MENTION, (m, pre, name) => {
+  const n = name.toLowerCase();
+  return known && known[n] ? `${pre}<a class="mention" href="#profile-${n}">@${n}</a>` : m;
+});
+// Abzeichen: Zahlen kommen aus der Ansicht profile_badge_stats, hier steht nur, ab wann es eins gibt
+const BADGES = [
+  { id: 'first',     i: 'car',   k: 'cars',           n: 1,  t: ['First car', 'Erstes Auto'],               d: ['An admin approved your first car', 'Ein Admin hat dein erstes Auto freigegeben'] },
+  { id: 'collector', i: 'car',   k: 'cars',           n: 10, t: ['Collector', 'Sammler'],                    d: ['10 approved cars', '10 freigegebene Autos'] },
+  { id: 'spotter',   i: 'cam',   k: 'sightings',      n: 10, t: ['Spotter', 'Späher'],                       d: ['10 sightings', '10 Sichtungen'] },
+  { id: 'eagle',     i: 'cam',   k: 'sightings',      n: 50, t: ['Eagle eye', 'Adleraugen'],                 d: ['50 sightings', '50 Sichtungen'] },
+  { id: 'local',     i: 'pin',   k: 'districts',      n: 5,  t: ['Local scout', 'Bezirks-Späher'],           d: ['Sightings in 5 districts', 'Sichtungen in 5 Bezirken'] },
+  { id: 'wide',      i: 'pin',   k: 'districts',      n: 15, t: ['All around', 'Weit unterwegs'],            d: ['Sightings in 15 districts', 'Sichtungen in 15 Bezirken'] },
+  { id: 'states',    i: 'pin',   k: 'regions',        n: 2,  t: ['Across the border', 'Über Landesgrenzen'], d: ['Sightings in 2 states', 'Sichtungen in 2 Bundesländern'] },
+  { id: 'liked',     i: 'heart', k: 'likes_received', n: 25, t: ['Crowd favourite', 'Publikumsliebling'],    d: ['25 likes on your cars', '25 Likes auf deine Autos'] },
+  { id: 'chatty',    i: 'chat',  k: 'comments',       n: 20, t: ['Chatty', 'Gesprächig'],                    d: ['20 comments', '20 Kommentare'] }
+];
+function badgesHTML(bs) {
+  const st = bs || {};
+  const v = b => +st[b.k] || 0;
+  const list = BADGES.slice().sort((a, b) => (v(b) >= b.n) - (v(a) >= a.n));
+  const got = list.filter(b => v(b) >= b.n).length;
+  return `<h2 style="margin-top:36px">${L('Badges', 'Abzeichen')} <small class="mute" style="font:700 17px var(--body)">${got} / ${BADGES.length}</small></h2>
+<ul class="badges">${list.map(b => { const on = v(b) >= b.n; return `<li class="badge${on ? ' on' : ''}"><span class="bi">${ic(b.i)}</span><div><strong>${esc(b.t[S.lang === 'de' ? 1 : 0])}</strong><span class="mute sm">${esc(b.d[S.lang === 'de' ? 1 : 0])}</span>${on ? '' : `<span class="prog" role="img" aria-label="${v(b)} / ${b.n}"><i style="width:${Math.min(100, Math.round(v(b) / b.n * 100))}%"></i></span>`}</div></li>`; }).join('')}</ul>`;
+}
 const uLink = p => p ? `<a href="#profile-${esc(p.username)}">@${esc(p.username)}</a>${p.is_pro ? ' <span class="pro">Pro</span>' : ''}` : '—';
 const plate = (s, lg) => `<span class="plate${lg ? ' lg' : ''}"><i></i><b>VCR ${pad(s.id)}</b><i></i></span>`;
 
@@ -142,7 +167,7 @@ function notifPanel() {
 function footer() {
   return `<button class="totop" data-act="top" aria-label="${L('Back to top', 'Nach oben')}">${ic('up')}</button>
 <footer class="foot"><div class="fg"><div class="fb"><a class="brand" href="#home"><span class="plate"><i></i><b>VCR</b><i></i></span><span>Vienna Car Registry</span></a>
-<p class="tag2">${L('Spotted in Vienna. Checked by admins.', 'In Wien gespottet. Von Admins geprüft.')}</p></div>
+<p class="tag2">${L('Spotted in Austria. Checked by admins.', 'In Österreich gespottet. Von Admins geprüft.')}</p></div>
 <div class="cols2"><div class="col"><p>${L('Resources', 'Ressourcen')}</p><a href="#cars">${L('Cars', 'Autos')}</a><a href="#archive">${L('Archive', 'Archiv')}</a><a href="#events">Events</a><a href="#ranking">Ranking</a></div>
 <div class="col"><p>${L('Community', 'Community')}</p><a href="#upload">${L('Upload a car', 'Auto hochladen')}</a><a href="#pro">Pro</a>${S.me && !isAdmin() ? `<a href="#apply">${L('Become an admin', 'Admin werden')}</a>` : ''}${S.me ? `<button data-act="logout">${L('Sign out', 'Abmelden')}</button>` : `<button data-act="login">${L('Sign in', 'Anmelden')}</button>`}</div></div></div>
 <p class="copy">© ${new Date().getFullYear()} Vienna Car Registry. ${L('All rights reserved.', 'Alle Rechte vorbehalten.')}</p></footer>`;
@@ -168,13 +193,14 @@ function filtered() {
   if (f.brand) a = a.filter(s => modelOf(s.model_id).brand === f.brand);
   if (f.model) a = a.filter(s => s.model_id === f.model);
   if (f.color) a = a.filter(s => s.color === f.color);
+  if (f.region) a = a.filter(s => regionOf(s.district) === f.region);
   if (q) a = a.filter(s => (spotName(s) + ' ' + COLORS[s.color].n.join(' ') + ' ' + (s.paint || '')).toLowerCase().includes(q));
   a = a.slice().sort(f.sort === 'likes' ? (x, y) => (y.likes - x.likes) || (y.id - x.id) : (x, y) => (y.id - x.id));
   return a;
 }
 function gridHTML() {
   const a = filtered();
-  if (!S.list.length) return `<div class="car_list"><div class="empty"><h2>${L('No cars yet', 'Noch keine Autos')}</h2><p>${L('Be the first to upload a car you saw in Vienna.', 'Lade als Erste oder Erster ein Auto hoch, das du in Wien gesehen hast.')}</p><a class="btn" href="#upload">${L('Upload a car', 'Auto hochladen')}</a></div></div>`;
+  if (!S.list.length) return `<div class="car_list"><div class="empty"><h2>${L('No cars yet', 'Noch keine Autos')}</h2><p>${L('Be the first to upload a car you saw in Austria.', 'Lade als Erste oder Erster ein Auto hoch, das du in Österreich gesehen hast.')}</p><a class="btn" href="#upload">${L('Upload a car', 'Auto hochladen')}</a></div></div>`;
   if (!a.length) return `<div class="car_list"><div class="empty"><h2>${L('No cars match these filters', 'Keine Autos für diese Filter')}</h2><p>${L('Try another colour or model, or clear the filters.', 'Probiere eine andere Farbe oder ein anderes Modell oder setze die Filter zurück.')}</p><button class="btn" data-act="clear">${L('Clear filters', 'Filter zurücksetzen')}</button></div></div>`;
   const shown = a.slice(0, S.f.n);
   return `<div class="car_list">${shown.map(tile).join('')}</div>${a.length > shown.length ? `<div class="more"><button class="btn" data-act="more">${L('See more', 'Mehr anzeigen')}</button></div>` : ''}`;
@@ -187,6 +213,7 @@ async function pageHome() {
   S.list = await cached('reg', () => api.listSpots('registry'));
   const evs = await cached('events', () => api.listEvents()).catch(() => []);
   const vis = S.list.filter(s => !S.blocked.has(s.user_id));
+  const cotm = await cached('cotm', () => api.loadCarOfMonth().catch(() => null));
   const brands = [...new Set(S.models.map(m => m.brand))];
   const nModels = new Set(vis.map(s => s.model_id)).size, nDist = new Set(vis.map(s => s.district)).size;
   const nLikes = vis.reduce((t, s) => t + (s.likes || 0), 0);
@@ -200,13 +227,14 @@ async function pageHome() {
     const ss = vis.filter(s => s.model_id === m.id).sort((x, y) => (y.likes - x.likes) || (y.id - x.id)), sp = S.specs[m.id] || {};
     const ph = ss.find(x => (x.photos || []).length);
     const facts = [sp.engine, sp.power, sp.year].filter(Boolean).join(' · ');
-    return `<button class="modc" data-act="modelf" data-v="${esc(m.id)}"><div class="image">${ph ? photoHTML(ph, 0) : `<div class="nophoto"><span>${esc(m.brand)}</span></div>`}</div><div class="t"><b>${esc(m.brand)} ${esc(m.name)}</b><p>${esc(facts) || (ss.length ? `${ss.length} ${ss.length === 1 ? L('car in Vienna', 'Auto in Wien') : L('cars in Vienna', 'Autos in Wien')}` : L('No cars in Vienna yet.', 'Noch keine Autos in Wien.'))}</p></div></button>`;
+    return `<button class="modc" data-act="modelf" data-v="${esc(m.id)}"><div class="image">${ph ? photoHTML(ph, 0) : `<div class="nophoto"><span>${esc(m.brand)}</span></div>`}</div><div class="t"><b>${esc(m.brand)} ${esc(m.name)}</b><p>${esc(facts) || (ss.length ? `${ss.length} ${ss.length === 1 ? L('car in Austria', 'Auto in Österreich') : L('cars in Austria', 'Autos in Österreich')}` : L('No cars in Austria yet.', 'Noch keine Autos in Österreich.'))}</p></div></button>`;
   }).join('');
   const cat = (href, i, n, t, d) => `<a class="cat" href="#${href}"><span class="upd">${ic(i)}${n}</span><div class="in"><h3>${t}</h3><p>${d}</p><span class="go">${L('Explore category', 'Kategorie ansehen')} →</span></div></a>`;
   return `<section class="wrap hero"><p class="welcome">${L('Welcome to', 'Willkommen bei')}</p><h1>Vienna Car Registry</h1>
-<p class="lead">${L('Explore the exclusive cars spotted in Vienna, with official data and paint names.', 'Entdecke die exklusiven Autos, die in Wien gespottet wurden, mit offiziellen Daten und Lacknamen.')}</p>
+<p class="lead">${L('Explore the exclusive cars spotted in Austria, with official data and paint names.', 'Entdecke die exklusiven Autos, die in Österreich gespottet wurden, mit offiziellen Daten und Lacknamen.')}</p>
 <form class="bigsearch" role="search" data-form="search"><label class="sr" for="q">${L('Search', 'Suche')}</label><input id="q" name="q" type="search" placeholder="${L('Search for Make or Model', 'Marke oder Modell suchen')}" autocomplete="off"><button type="submit" aria-label="${L('Search', 'Suchen')}">${ic('search')}</button></form>
 <div class="stats">${stat('car', vis.length, L('Cars registered', 'Autos im Register'))}${stat('star', nModels, L('Models', 'Modelle'))}${stat('pin', nDist, L('Districts', 'Bezirke'))}${stat('heart', nLikes, L('Likes', 'Likes'))}</div></section>
+${cotm && !S.blocked.has(cotm.spot.user_id) ? `<section class="wrap blk"><a class="cotm" href="#car-${cotm.spot.id}"><div class="cimg">${photoHTML(cotm.spot, 0)}</div><div class="ctxt"><span class="tag ok">${L('Car of the month', 'Auto des Monats')} · ${new Date(cotm.month).toLocaleDateString(S.lang === 'de' ? 'de-AT' : 'en-GB', { month: 'long', year: 'numeric', timeZone: 'Europe/Vienna' })}</span><h2>${esc(spotName(cotm.spot))}</h2><p class="mute">${esc(distLabel(cotm.spot.district))}, ${esc(regionName(cotm.spot.district))}</p><p class="clk">${ic('heart')} ${cotm.likes} ${cotm.likes === 1 ? L('like', 'Like') : L('likes', 'Likes')} ${L('this month', 'in diesem Monat')}</p></div></a></section>` : ''}
 <section class="wrap blk" id="reg">${blockTitle(L('Most Popular', 'Beliebteste'), L('(Most liked)', '(Meiste Likes)'))}
 <div class="selection" role="group" aria-label="${L('Sort', 'Sortierung')}"><button data-act="hometab" data-v="likes" aria-pressed="${S.homeTab === 'likes'}">${L('Likes', 'Likes')}</button><button data-act="hometab" data-v="new" aria-pressed="${S.homeTab === 'new'}">${L('Latest', 'Neueste')}</button></div>
 ${pop.length ? `<div class="car_list">${pop.map(tile).join('')}</div>` : gridHTML()}
@@ -215,7 +243,7 @@ ${up.length ? `<section class="wrap blk">${blockTitle(L('Latest Events', 'Nächs
 ${brands.length ? `<section class="wrap blk">${blockTitle(L('Explore - Make', 'Entdecken - Marken'))}<div class="brands">${brandCards}</div></section>` : ''}
 ${S.models.length ? `<section class="wrap blk">${blockTitle(L('Explore - Models', 'Entdecken - Modelle'))}<div class="models">${modCards}</div><div class="more"><a class="btn" href="#cars">${L('See more', 'Mehr anzeigen')}</a></div></section>` : ''}
 <section class="wrap blk"><p class="tagline">${L('Every car is checked by an admin before it goes live.', 'Jedes Auto wird von einem Admin geprüft, bevor es online geht.')}</p>
-<div class="cats">${cat('cars', 'car', vis.length, L('Cars', 'Autos'), L('Browse every exclusive car spotted in Vienna.', 'Alle exklusiven Autos ansehen, die in Wien gespottet wurden.'))}${cat('archive', 'lock', '', L('Archive', 'Archiv'), L('Ex-Viennese cars, visitors and event cars. Part of Pro.', 'Ex-Wiener Autos, Besucher und Event-Autos. Teil von Pro.'))}${cat('events', 'cal', up.length, 'Events', L('Meets and shows in and around Vienna.', 'Treffen und Shows in und um Wien.'))}${cat('ranking', 'star', '', 'Ranking', L('The spotters with the most approved uploads.', 'Die Spotter mit den meisten freigegebenen Uploads.'))}</div></section>`;
+<div class="cats">${cat('cars', 'car', vis.length, L('Cars', 'Autos'), L('Browse every exclusive car spotted in Austria.', 'Alle exklusiven Autos ansehen, die in Österreich gespottet wurden.'))}${cat('archive', 'lock', '', L('Archive', 'Archiv'), L('Ex-Viennese cars, visitors and event cars. Part of Pro.', 'Ex-Wiener Autos, Besucher und Event-Autos. Teil von Pro.'))}${cat('events', 'cal', up.length, 'Events', L('Meets and shows across Austria.', 'Treffen und Shows in ganz Österreich.'))}${cat('ranking', 'star', '', 'Ranking', L('The spotters with the most approved uploads.', 'Die Spotter mit den meisten freigegebenen Uploads.'))}</div></section>`;
 }
 
 async function pageCars() {
@@ -228,6 +256,7 @@ async function pageCars() {
 <div class="f big"><label for="q">${L('Search', 'Suche')}</label><input id="q" type="search" placeholder="${L('Make, model or paint', 'Marke, Modell oder Lack')}" value="${esc(f.q)}" autocomplete="off"></div>
 <div class="f"><label for="fb">${L('Make', 'Marke')}</label><select id="fb"><option value="">${L('All brands', 'Alle Marken')}</option>${brands.map(b => `<option${f.brand === b ? ' selected' : ''}>${esc(b)}</option>`).join('')}</select></div>
 <div class="f"><label for="fm">${L('Model', 'Modell')}</label><select id="fm"><option value="">${L('All models', 'Alle Modelle')}</option>${models.map(m => `<option value="${esc(m.id)}"${f.model === m.id ? ' selected' : ''}>${esc(m.name)}</option>`).join('')}</select></div>
+${GEO.regions.filter(r => r.active).length > 1 ? `<div class="f"><label for="fr">${L('State', 'Bundesland')}</label><select id="fr"><option value="">${L('All states', 'Alle Bundesländer')}</option>${GEO.regions.filter(r => r.active).map(r => `<option value="${esc(r.id)}"${f.region === r.id ? ' selected' : ''}>${esc(r.name)}</option>`).join('')}</select></div>` : ''}
 <div class="f"><label for="fc">${L('Colour', 'Farbe')}</label><select id="fc"><option value="">${L('All colours', 'Alle Farben')}</option>${Object.keys(COLORS).map(k => `<option value="${k}"${f.color === k ? ' selected' : ''}>${cn(k)}</option>`).join('')}</select></div>
 <div class="btns"><button type="button" class="btn ghost sm" data-act="clear">${L('Reset', 'Zurücksetzen')}</button><button type="submit" class="btn sm fill">${L('Search', 'Suchen')}</button></div></form>
 <div class="selection" role="group" aria-label="${L('Sort', 'Sortierung')}"><button data-act="sort" data-v="new" aria-pressed="${f.sort === 'new'}">${L('Newest', 'Neueste')}</button><button data-act="sort" data-v="likes" aria-pressed="${f.sort === 'likes'}">${L('Most liked', 'Meiste Likes')}</button></div>
@@ -286,13 +315,25 @@ async function pageCar(id) {
   if (s.status === 'rejected') pend = `<div class="banner bad" style="margin-top:14px">${L('This car was not accepted.', 'Dieses Auto wurde nicht angenommen.')}</div>`;
   const commentForm = banned()
     ? `<div class="banner bad">${L('Your account is suspended after three warnings. You can read, but not comment.', 'Dein Konto ist nach drei Verwarnungen gesperrt. Du kannst lesen, aber nicht kommentieren.')}</div>`
-    : s.status !== 'approved' ? '' : `<form data-form="comment" class="stack" style="margin:12px 0 6px"><label class="sr" for="ct">${L('Your comment', 'Dein Kommentar')}</label><textarea id="ct" name="text" rows="2" maxlength="400" placeholder="${L('Add a comment', 'Kommentar schreiben')}"></textarea><div class="row"><button class="btn sm" type="submit">${L('Post comment', 'Kommentar senden')}</button><span class="hint" style="margin:0">${L('Bad language is filtered and earns a warning.', 'Schimpfwörter werden gefiltert und führen zu einer Verwarnung.')}</span></div></form>`;
+    : s.status !== 'approved' ? '' : `<form data-form="comment" class="stack" style="margin:12px 0 6px"><input type="hidden" name="parent" value=""><div id="replyto" class="replyto" hidden><span></span><button type="button" class="linkb sm" data-act="cancelreply">${L('Cancel', 'Abbrechen')}</button></div><label class="sr" for="ct">${L('Your comment', 'Dein Kommentar')}</label><textarea id="ct" name="text" rows="2" maxlength="400" placeholder="${L('Add a comment. Use @name to mention someone.', 'Kommentar schreiben. Mit @name erwähnst du jemanden.')}"></textarea><div class="row"><button class="btn sm" type="submit">${L('Post comment', 'Kommentar senden')}</button><span class="hint" style="margin:0">${L('Bad language is filtered and earns a warning.', 'Schimpfwörter werden gefiltert und führen zu einer Verwarnung.')}</span></div></form>`;
+  const known = d.mentions || {};
+  const cmHTML = (c, re) => {
+    const au = d.authors[c.user_id];
+    const canReply = !!au && s.status === 'approved' && !banned();
+    return `<div class="cm${re ? ' re' : ''}" id="c${c.id}">${av(au, re ? 30 : 36)}<div><div class="meta">${uLink(au)} · ${fd(c.created_at)}${c.filtered ? ` · <span class="tag warn">${L('Filtered', 'Gefiltert')}</span>` : ''}</div><p>${mentionHTML(c.body, known)}</p><div class="cacts">${canReply ? `<button class="linkb sm mute" data-act="reply" data-pid="${c.parent_id || c.id}" data-u="${esc(au.username)}">${L('Reply', 'Antworten')}</button>` : ''}${c.user_id !== S.me.id ? `<button class="linkb sm mute" data-act="report" data-k="comment" data-id="${s.id}" data-cid="${c.id}">${L('Report comment', 'Kommentar melden')}</button>` : ''}</div></div></div>`;
+  };
+  const shownIds = new Set(cs.map(c => c.id));
+  const tops = cs.filter(c => !c.parent_id || !shownIds.has(c.parent_id));
+  const kids = id => cs.filter(c => c.parent_id === id);
+  const thread = c => cmHTML(c, false) + (kids(c.id).length ? `<div class="replies">${kids(c.id).map(k => cmHTML(k, true)).join('')}</div>` : '');
   const comments = S.me
     ? `<h2>${L('Comments', 'Kommentare')} (${cs.length})</h2>${commentForm}
-${cs.map(c => `<div class="cm">${av(d.authors[c.user_id], 36)}<div><div class="meta">${uLink(d.authors[c.user_id])} · ${fd(c.created_at)}${c.filtered ? ` · <span class="tag warn">${L('Filtered', 'Gefiltert')}</span>` : ''}</div><p>${esc(c.body)}</p>${c.user_id !== S.me.id ? `<button class="linkb sm mute" data-act="report" data-k="comment" data-id="${s.id}" data-cid="${c.id}">${L('Report comment', 'Kommentar melden')}</button>` : ''}</div></div>`).join('')}`
+${tops.map(thread).join('')}`
     : `<h2>${L('Comments', 'Kommentare')}</h2><div class="lock">${ic('lock')}<div><p><strong>${L('Comments and full details are for members.', 'Kommentare und alle Details sind für Mitglieder.')}</strong><br>${L('Create a free account to read and write comments and see the full spec.', 'Erstelle ein kostenloses Konto, um Kommentare zu lesen und zu schreiben und alle Daten zu sehen.')}</p><button class="btn sm" data-act="login">${L('Sign in or create account', 'Anmelden oder Konto erstellen')}</button></div></div>`;
   const spUsers = [...new Set(marks.map(x => x.user_id))].map(id => d.authors[id]).filter(Boolean).filter(u => !S.blocked.has(u.id));
   const spotters = spUsers.length ? spUsers.slice(0, 5).map(uLink).join(', ') + (spUsers.length > 5 ? ` ${L(`and ${spUsers.length - 5} more`, `und ${spUsers.length - 5} weitere`)}` : '') : '—';
+  const hist = marks.filter(m => !S.blocked.has(m.user_id));
+  const timeline = hist.length ? `<div class="card"><h2>${L('Sighting history', 'Sichtungs-Verlauf')}</h2><ol class="tline">${hist.map(m => `<li><time datetime="${esc(m.spotted_on)}">${fd(m.spotted_on)}</time><div><strong>${esc(distLabel(m.district))}</strong><span class="mute sm">${esc(regionName(m.district))} · ${L('spotted by', 'gespottet von')} ${d.authors[m.user_id] ? uLink(d.authors[m.user_id]) : '—'}</span></div></li>`).join('')}</ol></div>` : '';
   const markHint = S.me && s.status === 'approved' && !canEdit ? `<p class="hint" style="margin-top:14px">${L('Seen this car? Mark it as spotted to suggest changes.', 'Dieses Auto gesehen? Markiere es als gespottet, um Änderungen vorzuschlagen.')}</p>` : '';
   const info = `<div class="card"><h2>${L('Information', 'Information')}</h2><dl class="infolist">
 <div><dt>${L('Listed in', 'Eingetragen in')}</dt><dd>${s.kind === 'archive' ? `${L('Archive', 'Archiv')}: ${archL(s.arch_kind)}` : L('Registry', 'Register')}</dd></div>
@@ -303,7 +344,7 @@ ${cs.map(c => `<div class="cm">${av(d.authors[c.user_id], 36)}<div><div class="m
 ${gallery}
 <div class="carh"><div class="row pl">${plate(s, true)}${s.status === 'pending' ? `<span class="tag warn">${L('Waiting for approval', 'Wartet auf Freigabe')}</span>` : ''}</div>
 <h1>${esc(spotName(s))}</h1>${pend}
-<p class="loc"><i class="flag" role="img" aria-label="Austria"></i>${esc(distLabel(s.district))}, Wien, ${L('Austria', 'Österreich')}</p></div>
+<p class="loc"><i class="flag" role="img" aria-label="Austria"></i>${esc(distLabel(s.district))}, ${esc(regionName(s.district))}, ${L('Austria', 'Österreich')}</p></div>
 <div class="statrow">
 <button data-act="like" data-id="${s.id}" aria-pressed="${liked}">${ic('heart')} ${d.likes} ${L('Likes', 'Likes')}</button>
 <a class="lk" href="#comments" data-act="tocomments">${ic('chat')} ${cs.length} ${L('Comments', 'Kommentare')}</a>
@@ -314,7 +355,7 @@ ${s.status === 'approved' ? `<button data-act="spotted" data-id="${s.id}" aria-p
 <span class="sp"></span>
 ${canEdit ? `<button data-act="edit" data-id="${s.id}">${ic('pen')} ${L('Edit', 'Bearbeiten')}</button>` : ''}
 <button data-act="report" data-k="spot" data-id="${s.id}">${ic('flag')} ${L('Report', 'Melden')}</button></div>
-<div class="cols"><div>${info}<div id="comments" class="card">${comments}</div></div>${panel}</div></div>`;
+<div class="cols"><div>${info}${timeline}<div id="comments" class="card">${comments}</div></div>${panel}</div></div>`;
 }
 
 async function pageEvents() {
@@ -322,7 +363,7 @@ async function pageEvents() {
   const today = new Date().toISOString().slice(0, 10);
   const list = evs.filter(e => e.starts_on >= today);
   const mo = d => new Date(d + 'T12:00:00').toLocaleDateString(S.lang === 'de' ? 'de-AT' : 'en-GB', { month: 'short', year: 'numeric' });
-  return head(L('Car events in Vienna', 'Auto-Events in Wien'), L('Meets and shows added by the admin team. Members can’t submit events.', 'Treffen und Shows, eingetragen vom Admin-Team. Events können nicht von Usern eingereicht werden.'))
+  return head(L('Car events in Austria', 'Auto-Events in Österreich'), L('Meets and shows added by the admin team. Members can’t submit events.', 'Treffen und Shows, eingetragen vom Admin-Team. Events können nicht von Usern eingereicht werden.'))
     + `<div class="wrap"><ul class="evl">${list.length ? list.map(e => `<li><div class="evd"><b>${+e.starts_on.slice(8, 10)}</b><span>${mo(e.starts_on)}</span></div><div><h3>${esc(e.title)}</h3><p class="mute" style="margin:4px 0">${esc([e.place, e.district ? distLabel(e.district) : ''].filter(Boolean).join(' · '))}</p><p>${esc(e.description)}</p></div></li>`).join('') : `<li>${L('No upcoming events yet.', 'Noch keine kommenden Events.')}</li>`}</ul></div>`;
 }
 
@@ -381,6 +422,7 @@ async function pageProfile(name) {
 <h2 style="margin-top:12px">Dream Garage</h2>
 <p class="mute sm" style="margin:6px 0 14px">${L(`${slots} slots: 3 to start, one more for every 5 approved uploads. Everyone can see it.`, `${slots} Plätze: 3 zum Start, einer mehr pro 5 freigegebenen Uploads. Für alle sichtbar.`)}</p>
 <div class="garage">${g}</div>${slots > 12 ? `<p class="hint">${L(`+${slots - 12} more slots unlocked`, `+${slots - 12} weitere Plätze freigeschaltet`)}</p>` : ''}
+${badgesHTML(d.badgeStats)}
 <h2 style="margin-top:36px">${L('Uploads', 'Uploads')}</h2>
 <div class="car_list">${spots.length ? spots.map(s => `<div>${tile(s)}${s.status === 'pending' ? `<span class="tag warn" style="margin-top:6px">${L('Waiting for approval', 'Wartet auf Freigabe')}</span>` : s.status === 'rejected' ? `<span class="tag" style="margin-top:6px">${L('Not accepted', 'Nicht angenommen')}</span>` : ''}</div>`).join('') : `<p class="mute">${L('No uploads yet.', 'Noch keine Uploads.')}</p>`}</div>${favs}</div>`;
 }
@@ -418,7 +460,9 @@ function pickColor(mid, v) {
   const c = v.get('color');
   return c && COLORS[c] ? { color: c, paint: null } : { err: 1 };
 }
-const distOpts = sel => BEZ.map((b, i) => `<option value="${i + 1}"${sel === i + 1 ? ' selected' : ''}>${esc(distLabel(i + 1))}</option>`).join('');
+// Bezirke nach Bundesland gruppiert; nur aktive Bundesländer (und das des gewählten Bezirks)
+const distOpts = sel => GEO.regions.filter(r => r.active || regionOf(sel) === r.id)
+  .map(r => `<optgroup label="${esc(r.name)}">${GEO.districts.filter(d => d.region_id === r.id).map(d => `<option value="${d.id}"${sel === d.id ? ' selected' : ''}>${esc(distLabel(d.id))}</option>`).join('')}</optgroup>`).join('');
 const prevHTML = () => S.up.files.map((f, i) => `<div><img src="${f.url}" alt="${esc(f.file.name)}"><button type="button" data-act="rmphoto" data-i="${i}" aria-label="${L('Remove photo', 'Foto entfernen')}">×</button></div>`).join('');
 
 function pageUpload() {
@@ -427,7 +471,7 @@ function pageUpload() {
   const k = S.up.kind;
   return head(L('Upload a car', 'Auto hochladen'), L('Every upload is reviewed by an admin before it appears. Pro members are reviewed first.', 'Jeder Upload wird von einem Admin geprüft, bevor er erscheint. Pro-Mitglieder werden zuerst geprüft.'))
     + `<div class="wrap"><form class="form" data-form="upload" novalidate>
-<fieldset><legend>${L('What are you uploading?', 'Was lädst du hoch?')}</legend><div class="choice"><label><input type="radio" name="kind" value="registry"${k === 'registry' ? ' checked' : ''}><span>${L('A car seen in Vienna', 'Ein Auto in Wien gesehen')}</span></label><label><input type="radio" name="kind" value="archive"${k === 'archive' ? ' checked' : ''}><span>${L('Archive request', 'Archiv-Anfrage')}</span></label></div>
+<fieldset><legend>${L('What are you uploading?', 'Was lädst du hoch?')}</legend><div class="choice"><label><input type="radio" name="kind" value="registry"${k === 'registry' ? ' checked' : ''}><span>${L('A car seen in Austria', 'Ein Auto in Österreich gesehen')}</span></label><label><input type="radio" name="kind" value="archive"${k === 'archive' ? ' checked' : ''}><span>${L('Archive request', 'Archiv-Anfrage')}</span></label></div>
 <p class="hint">${L('Archive: cars that were sold abroad, visited Vienna or showed up at an event.', 'Archiv: Autos, die ins Ausland verkauft wurden, Wien besucht haben oder bei einem Event waren.')}</p></fieldset>
 <div id="archkind" ${k === 'archive' ? '' : 'hidden'}><label for="ak">${L('Archive type', 'Archiv-Art')}</label><select id="ak" name="arch"><option value="ex">${archL('ex')}</option><option value="visit">${archL('visit')}</option><option value="event">${archL('event')}</option></select></div>
 <div><label for="um">${L('Model', 'Modell')}</label><select id="um" name="model" required><option value="">${L('Choose a model', 'Modell wählen')}</option>${S.models.map(m => `<option value="${esc(m.id)}">${esc(`${m.brand} ${m.name}`)}</option>`).join('')}</select>
@@ -490,6 +534,7 @@ function adminBody(A) {
     return `<div class="qrow"><div class="qmain"><strong>${uLink(u)}</strong> ${u.role !== 'member' ? `<span class="tag">${esc(u.role)}</span>` : ''}${st.banned ? ` <span class="tag warn">${L('Suspended', 'Gesperrt')}</span>` : ''}<p class="mute sm">${L('Warnings', 'Verwarnungen')}: ${st.warnings}</p></div><div class="qact"><button class="btn ghost sm" data-act="uact" data-id="${u.id}" data-a="${u.is_pro ? 'pro_off' : 'pro_on'}">${u.is_pro ? L('Remove Pro', 'Pro entziehen') : L('Give Pro', 'Pro geben')}</button>${st.banned || st.warnings ? `<button class="btn ghost sm" data-act="uact" data-id="${u.id}" data-a="unban">${L('Reset warnings', 'Verwarnungen zurücksetzen')}</button>` : ''}${!st.banned && u.role === 'member' ? `<button class="btn red sm" data-act="uact" data-id="${u.id}" data-a="ban">${L('Suspend', 'Sperren')}</button>` : ''}</div></div>`;
   }).join('');
   if (t === 'paints') return paintsAdmin();
+  if (t === 'regions') return isCeo() ? `<p class="mute sm" style="padding:12px 0 4px">${L('Only active states accept new cars and sightings. Cars already listed stay visible.', 'Nur in aktiven Bundesländern kann man neue Autos und Sichtungen eintragen. Bereits eingetragene Autos bleiben sichtbar.')}</p>${GEO.regions.map(r => { const n = GEO.districts.filter(x => x.region_id === r.id).length; return `<div class="qrow"><div class="qmain"><strong>${esc(r.name)}</strong> ${r.active ? `<span class="tag ok">${L('Active', 'Aktiv')}</span>` : `<span class="tag">${L('Not open yet', 'Noch nicht offen')}</span>`}<p class="mute sm">${n} ${r.id === 'wien' ? L('districts', 'Bezirke') : L('districts and cities', 'Bezirke und Städte')}</p></div><div class="qact"><button class="btn ${r.active ? 'ghost' : ''} sm" data-act="regiontoggle" data-id="${esc(r.id)}" data-on="${r.active ? '' : '1'}">${r.active ? L('Close', 'Sperren') : L('Open', 'Freischalten')}</button></div></div>`; }).join('')}` : '';
   if (t === 'events') return `<form data-form="event" class="form" style="padding:18px 0 10px;max-width:560px"><div><label for="et">${L('Title', 'Titel')}</label><input id="et" name="title" type="text" required></div><div class="row"><div style="flex:1;min-width:150px"><label for="ed">${L('Date', 'Datum')}</label><input id="ed" name="date" type="text" placeholder="2027-04-17" required></div><div style="flex:1;min-width:150px"><label for="edi">${L('District', 'Bezirk')}</label><select id="edi" name="d">${distOpts(1)}</select></div></div><div><label for="ep">${L('Place', 'Ort')}</label><input id="ep" name="place" type="text"></div><div><label for="ex">${L('Description', 'Beschreibung')}</label><textarea id="ex" name="text" rows="2"></textarea></div><p class="err" id="eerr"></p><div class="row"><button class="btn" type="submit">${L('Add event', 'Event hinzufügen')}</button></div></form>${A.events.map(e => `<div class="qrow"><div class="qmain"><strong>${esc(e.title)}</strong><p class="mute sm">${fd(e.starts_on)}${e.district ? ' · ' + esc(distLabel(e.district)) : ''}</p></div><div class="qact"><button class="btn red sm" data-act="evdel" data-id="${e.id}">${L('Delete', 'Löschen')}</button></div></div>`).join('')}`;
   return '';
 }
@@ -497,7 +542,7 @@ async function pageAdmin() {
   if (!isAdmin()) return head('Admin', L('This area is for admins. Applications are open.', 'Dieser Bereich ist für Admins. Bewerbungen sind offen.')) + `<div class="wrap sec"><a class="btn" href="#apply">${L('Become an admin', 'Admin werden')}</a></div>`;
   const A = await cached('admin', async () => { const a = await api.adminData(); a.events = await api.listEvents(); return a; });
   const cnt = { spots: A.spots.filter(s => s.kind === 'registry').length, archive: A.spots.filter(s => s.kind === 'archive').length, edits: A.edits.length, models: A.models.length, reports: A.reports.length, apps: A.apps.length };
-  const tabs = [['spots', L('Cars', 'Autos')], ['edits', L('Edits', 'Änderungen')], ['archive', L('Archive requests', 'Archiv-Anfragen')], ['models', L('Model requests', 'Modell-Anfragen')], ['reports', L('Reports', 'Meldungen')], ['apps', L('Applications', 'Bewerbungen')], ['users', L('People', 'Personen')], ['paints', L('Paints', 'Lacke')], ['events', 'Events']];
+  const tabs = [...(isCeo() ? [['regions', L('States', 'Bundesländer')]] : []), ['spots', L('Cars', 'Autos')], ['edits', L('Edits', 'Änderungen')], ['archive', L('Archive requests', 'Archiv-Anfragen')], ['models', L('Model requests', 'Modell-Anfragen')], ['reports', L('Reports', 'Meldungen')], ['apps', L('Applications', 'Bewerbungen')], ['users', L('People', 'Personen')], ['paints', L('Paints', 'Lacke')], ['events', 'Events']];
   return head('Admin', L('Pro members are listed first in the queue.', 'Pro-Mitglieder stehen zuerst in der Warteschlange.'))
     + `<div class="wrap sec"><div class="tabs" role="group" aria-label="Admin">${tabs.map(t => `<button data-act="atab" data-v="${t[0]}" aria-pressed="${S.adminTab === t[0]}">${t[1]}${cnt[t[0]] != null ? `<em>${cnt[t[0]]}</em>` : ''}</button>`).join('')}</div><div id="abody">${adminBody(A)}</div></div>`;
 }
@@ -639,7 +684,7 @@ async function act(a, d, e, el) {
       break;
     }
     case 'tocomments': e.preventDefault(); { const c = $('#comments'); if (c) c.scrollIntoView(); } break;
-    case 'modelf': { const mm = S.models.find(x => x.id === d.v); S.f = { q: '', brand: mm ? mm.brand : '', model: d.v, color: '', sort: S.f.sort, n: 24 }; go('cars'); break; }
+    case 'modelf': { const mm = S.models.find(x => x.id === d.v); S.f = { q: '', brand: mm ? mm.brand : '', model: d.v, color: '', region: '', sort: S.f.sort, n: 24 }; go('cars'); break; }
     case 'like': {
       if (needLogin()) break;
       const id = +d.id, on = !S.likes.has(id); await api.setLike(S.me.id, id, on);
@@ -656,6 +701,14 @@ async function act(a, d, e, el) {
       const c = await cached('car' + d.id, () => api.getSpot(d.id));
       openModal({ t: 'spotted', id: +d.id, district: c.spot.district, first: !(c.marks || []).some(x => x.user_id === S.me.id) }); break;
     }
+    case 'reply': {
+      const f = $('form[data-form=comment]'); if (!f) break;
+      f.elements.parent.value = d.pid;
+      const rt = $('#replyto'); rt.hidden = false; rt.querySelector('span').textContent = L(`Replying to @${d.u}`, `Antwort an @${d.u}`);
+      const ta = $('#ct'); if (!ta.value.trim()) ta.value = `@${d.u} `;
+      ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); f.scrollIntoView({ block: 'center' }); break;
+    }
+    case 'cancelreply': { const f = $('form[data-form=comment]'); if (f) { f.elements.parent.value = ''; $('#replyto').hidden = true; } break; }
     case 'report': if (needLogin()) break; openModal({ t: 'report', k: d.k, id: +d.id, cid: d.cid ? +d.cid : null }); break;
     case 'edit': {
       const c = await cached('car' + d.id, () => api.getSpot(d.id));
@@ -664,9 +717,9 @@ async function act(a, d, e, el) {
     case 'reqmodel': openModal({ t: 'model' }); break;
     case 'editprofile': openModal({ t: 'profile' }); break;
     case 'sort': S.f.sort = d.v; S.f.n = 24; render(); break;
-    case 'brandf': S.f = { q: '', brand: d.v, model: '', color: '', sort: S.f.sort, n: 24 }; go('cars'); break;
+    case 'brandf': S.f = { q: '', brand: d.v, model: '', color: '', region: '', sort: S.f.sort, n: 24 }; go('cars'); break;
     case 'colorf': S.f.color = S.f.color === d.v ? '' : d.v; render(); break;
-    case 'clear': S.f = { q: '', brand: '', model: '', color: '', sort: S.f.sort, n: 24 }; render(); break;
+    case 'clear': S.f = { q: '', brand: '', model: '', color: '', region: '', sort: S.f.sort, n: 24 }; render(); break;
     case 'follow': {
       if (needLogin()) break;
       const on = !S.following.has(d.id); await api.setFollow(S.me.id, d.id, on);
@@ -694,6 +747,12 @@ async function act(a, d, e, el) {
     case 'appyes': await api.decideApplication(+d.id, true); await after(L('Accepted.', 'Angenommen.')); break;
     case 'appno': await api.decideApplication(+d.id, false); await after(); break;
     case 'uact': await api.adminUserAction(d.id, d.a); await after(); break;
+    case 'regiontoggle': {
+      if (!isCeo()) break;
+      await api.setRegionActive(d.id, !!d.on);
+      const g = await api.loadGeo(); setGeo(g.regions, g.districts);
+      await after(d.on ? L('State opened.', 'Bundesland freigeschaltet.') : L('State closed.', 'Bundesland gesperrt.')); break;
+    }
     case 'evdel': await api.deleteEvent(+d.id); await after(); break;
     case 'paintdel': await api.deletePaint(+d.id); S.paints = await api.loadColors(); await after(L('Paint removed.', 'Lack entfernt.')); break;
   }
@@ -714,6 +773,7 @@ document.addEventListener('change', e => {
   if (t.id === 'fb') { S.f.brand = t.value; S.f.model = ''; S.f.n = 24; render(); }
   else if (t.id === 'fm') { S.f.model = t.value; S.f.n = 24; render(); }
   else if (t.id === 'fc') { S.f.color = t.value; S.f.n = 24; render(); }
+  else if (t.id === 'fr') { S.f.region = t.value; S.f.n = 24; render(); }
   else if (t.name === 'kind') { S.up.kind = t.value; const a = $('#archkind'); if (a) a.hidden = t.value !== 'archive'; }
   else if (t.id === 'um') { const pk = $('#paintpick'); if (pk) pk.innerHTML = paintPicker(t.value, '', ''); }
   else if (t.name === 'paint') { const w = $('#famwrap'); if (w) w.hidden = t.value !== ''; }
@@ -748,11 +808,11 @@ async function submit(f) {
       } else { await api.signIn(email, pw); S.modal = null; }
       break;
     }
-    case 'search': { S.f = { q: String(v.get('q') || ''), brand: '', model: '', color: '', sort: S.f.sort, n: 24 }; go('cars'); break; }
+    case 'search': { S.f = { q: String(v.get('q') || ''), brand: '', model: '', color: '', region: '', sort: S.f.sort, n: 24 }; go('cars'); break; }
     case 'filters': break;
     case 'comment': {
       const body = String(v.get('text') || '').trim(); if (!body) return;
-      await api.postComment(+S.arg, S.me.id, body);
+      await api.postComment(+S.arg, S.me.id, body, +v.get('parent') || null);
       await after(); break;
     }
     case 'report': {
@@ -849,6 +909,7 @@ async function init() {
   try { S.configured = await api.connect(); } catch (e) { console.error(e); S.configured = false; }
   if (!S.configured) { render(); return; }
   try {
+    try { const g = await api.loadGeo(); if (!g.districts.length) throw new Error('no districts'); setGeo(g.regions, g.districts); } catch (e) { console.warn(e); wienOnly(); }
     S.models = await api.loadModels();
     S.paints = await api.loadColors().catch(() => ({}));
     await refreshMe();

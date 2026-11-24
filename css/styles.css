@@ -461,3 +461,46 @@ main{padding-top:106px;min-height:70vh;outline:0}
  .models{grid-template-columns:repeat(2,1fr)}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* Auto des Monats */
+.cotm{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);background:var(--surface);border-radius:var(--r4);overflow:hidden;box-shadow:var(--shadow);text-decoration:none;color:inherit;transition:transform .25s,box-shadow .25s}
+.cotm:hover{transform:translateY(-3px);box-shadow:var(--shadow-up)}
+.cotm .cimg{aspect-ratio:16/10;background:var(--raise);overflow:hidden}
+.cotm .cimg img,.cotm .cimg .nophoto{width:100%;height:100%;object-fit:cover}
+.cotm .ctxt{display:flex;flex-direction:column;justify-content:center;align-items:flex-start;gap:10px;padding:clamp(20px,3vw,44px)}
+.cotm h2{font-size:clamp(26px,3vw,40px)}
+.cotm p{margin:0}
+.cotm .clk{display:flex;align-items:center;gap:8px;font-weight:800;color:var(--head)}
+.cotm .clk svg{width:20px;height:20px;stroke:var(--like);fill:var(--like)}
+@media (max-width:760px){.cotm{grid-template-columns:1fr}}
+
+/* Sichtungs-Verlauf */
+.tline{list-style:none;margin:0;padding:0 0 0 22px;border-left:2px solid var(--line);display:grid;gap:20px}
+.tline li{position:relative;display:grid;grid-template-columns:116px minmax(0,1fr);gap:14px;align-items:baseline}
+.tline li::before{content:"";position:absolute;left:-30px;top:5px;width:12px;height:12px;border-radius:50%;background:var(--surface);border:3px solid var(--icon)}
+.tline li:first-child::before{background:var(--accent);border-color:var(--accent)}
+.tline time{font-weight:700;color:var(--head);font-size:15px}
+.tline strong{display:block;font-size:17px;color:var(--head)}
+@media (max-width:520px){.tline li{grid-template-columns:1fr;gap:2px}}
+
+/* Antworten und Erwähnungen */
+.cm>div{min-width:0}
+.replies{margin:0 0 6px 18px;padding-left:18px;border-left:2px solid var(--line)}
+.cm.re{padding:12px 0}
+.replies .cm:last-child{border-bottom:0}
+.cacts{display:flex;gap:16px;flex-wrap:wrap;margin-top:4px}
+.mention{font-weight:700}
+.replyto{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--raise);border-radius:var(--r1);padding:8px 14px;font-weight:700;font-size:14px}
+
+/* Abzeichen */
+.badges{list-style:none;margin:14px 0 0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px}
+.badge{display:flex;gap:14px;align-items:flex-start;background:var(--surface);border:1.5px solid var(--line);border-radius:var(--r3);padding:16px 18px;opacity:.8}
+.badge.on{opacity:1;border-color:var(--accent);box-shadow:var(--shadow)}
+.badge .bi{flex:none;display:grid;place-items:center;width:46px;height:46px;border-radius:50%;background:var(--raise);color:var(--mute)}
+.badge.on .bi{background:var(--accent);color:var(--on-accent)}
+.badge .bi svg{width:24px;height:24px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.badge div{min-width:0}
+.badge div>span{display:block}
+.badge strong{display:block;font:700 18px var(--display);color:var(--head)}
+.badge .prog{height:6px;border-radius:99px;background:var(--raise);margin-top:8px;overflow:hidden}
+.badge .prog i{display:block;height:100%;background:var(--icon);border-radius:99px}
