@@ -1,7 +1,7 @@
 // Alle Zugriffe auf Supabase an einer Stelle.
 // Die Zugriffsregeln selbst stehen in supabase/schema.sql (Row Level Security),
 // diese Datei fragt nur an und gibt die Antworten an die Oberfläche weiter.
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js?v=5';
 
 export const configured = /^https:\/\/[^/]+\.supabase\.(co|in)\/?$/.test(SUPABASE_URL) && SUPABASE_ANON_KEY.length > 20 && !SUPABASE_ANON_KEY.startsWith('DEIN');
 let sb = null;
