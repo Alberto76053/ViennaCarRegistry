@@ -10,11 +10,11 @@ const pad = n => String(n).padStart(4, '0');
 
 const S = {
   lang: LS('vcr-lang') === 'de' ? 'de' : 'en',
-  theme: LS('vcr-theme') === 'light' ? 'light' : 'dark',
+  theme: LS('vcr-theme') === 'dark' ? 'dark' : 'light',
   configured: false, route: 'home', arg: '', pi: 0, tok: 0,
   me: null, status: null, models: [], specs: {}, paints: {},
   likes: new Set(), favs: new Set(), following: new Set(), blocked: new Set(), notes: [],
-  f: { q: '', brand: '', model: '', color: '', sort: 'new' },
+  f: { q: '', brand: '', model: '', color: '', sort: 'new', n: 24 }, menu: false, ptab: 'details', homeTab: 'likes', carPhotos: [],
   list: [], modal: null, authTab: 'in', adminTab: 'spots', notifOpen: false,
   msgWith: null, up: { files: [], kind: 'registry', busy: false }, errUp: '', applied: false,
   cache: new Map()
@@ -65,7 +65,23 @@ const IC = {
   pen: '<path d="M4 20l1-4L16 5l3 3L8 19z"/>',
   search: '<circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/>',
   car: '<path d="M4 16v-4l2-5h12l2 5v4M3 16h18M7 16v2.5M17 16v2.5"/><circle cx="8" cy="13" r=".8"/><circle cx="16" cy="13" r=".8"/>',
-  pin: '<path d="M12 21s7-6.2 7-11a7 7 0 10-14 0c0 4.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/>'
+  pin: '<path d="M12 21s7-6.2 7-11a7 7 0 10-14 0c0 4.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/>',
+  user: '<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/>',
+  menu: '<path d="M4 7h16M4 12h16M4 17h16"/>',
+  up: '<path d="M12 19V5M5 12l7-7 7 7"/>',
+  chat: '<path d="M4 5h16v11H9l-5 4z"/>',
+  cam: '<rect x="3" y="7" width="18" height="13" rx="2"/><circle cx="12" cy="13.5" r="3.5"/><path d="M8 7l1.5-3h5L16 7"/>',
+  share: '<circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="M8.2 10.8l7.6-3.6M8.2 13.2l7.6 3.6"/>',
+  drop: '<path d="M12 3s6 6.4 6 11a6 6 0 11-12 0c0-4.6 6-11 6-11z"/>',
+  pal: '<path d="M12 3a9 9 0 100 18c1.5 0 2-1 1.6-2-.5-1.2.2-2.5 1.6-2.5H17a4 4 0 004-4c0-5-4-9.5-9-9.5z"/><circle cx="7.5" cy="11" r="1.1"/><circle cx="10.5" cy="7" r="1.1"/><circle cx="15" cy="7.5" r="1.1"/>',
+  hash: '<path d="M5 9h14M5 15h14M10 4L8 20M16 4l-2 16"/>',
+  eng: '<path d="M4 9h3l1-2h6l1 2h2v2h2v4h-2v2H7l-3-3z"/><path d="M10 12h4"/>',
+  bolt: '<path d="M13 3L5 14h6l-1 7 8-11h-6z"/>',
+  gear: '<circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/>',
+  wheel: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.5"/><path d="M12 14.5V21M9.8 11H3.2M14.2 11h6.6"/>',
+  cal: '<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/>',
+  info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/>',
+  spec: '<path d="M4 7h10M18 7h2M4 17h2M10 17h10M14 4v6M6 14v6"/>'
 };
 const ic = n => `<svg viewBox="0 0 24 24" aria-hidden="true">${IC[n]}</svg>`;
 
@@ -85,37 +101,53 @@ function photoHTML(s, i) {
   if (url) return `<img src="${esc(url)}" alt="${esc(spotName(s))}" loading="lazy">`;
   return `<div class="nophoto"><span>${esc(spotName(s))}</span></div>`;
 }
-const tile = s => `<a class="tile" href="#car-${s.id}"><div class="ph">${photoHTML(s, 0)}</div><div class="nm">${esc(spotName(s))}</div></a>`;
+const ico = (n, v, t) => `<div class="icons_info" title="${esc(t)}"><i>${ic(n)}</i><span>${v}</span></div>`;
+const tile = s => {
+  const m = modelOf(s.model_id);
+  return `<div class="car_item"><a class="tile" href="#car-${s.id}"><div class="image">${photoHTML(s, 0)}</div>
+<div class="texto"><p class="title"><i class="flag" role="img" aria-label="Austria"></i><span class="t">${esc(spotName(s))}</span>${s.paint ? `<small>${esc(s.paint)}</small>` : ''}</p>
+<div class="icons_row">${ico('heart', s.likes || 0, L('Likes', 'Likes'))}${ico('chat', s.comments || 0, L('Comments', 'Kommentare'))}${ico('pin', s.district, distLabel(s.district))}${ico('cam', Math.max((s.photos || []).length, 0), L('Photos', 'Fotos'))}</div></div></a></div>`;
+};
 
 function header() {
-  const nav = [['home', L('Registry', 'Register')], ['archive', L('Archive', 'Archiv')], ['events', 'Events'], ['ranking', 'Ranking']];
+  const nav = [['cars', L('Cars', 'Autos')], ['archive', L('Archive', 'Archiv')], ['events', 'Events'], ['ranking', 'Ranking']];
   if (isAdmin()) nav.push(['admin', 'Admin']);
-  const cur = S.route === 'car' ? 'home' : S.route;
+  const cur = S.route === 'car' || S.route === 'home' ? (S.route === 'car' ? 'cars' : '') : S.route;
   const unread = S.notes.filter(n => !n.read).length;
   const lock = `<svg viewBox="0 0 24 24" aria-hidden="true" style="width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2">${IC.lock}</svg>`;
-  const links = nav.map(n => `<a href="#${n[0]}"${cur === n[0] ? ' aria-current="page"' : ''}>${n[1]}${n[0] === 'archive' && !isPro() ? lock : ''}</a>`).join('');
+  const lk = (n, cls) => `<a href="#${n[0]}"${cur === n[0] ? ' aria-current="page"' : ''}${cls ? ` class="${cls}"` : ''}>${n[1]}${n[0] === 'archive' && !isPro() ? lock : ''}</a>`;
+  const links = nav.map(n => lk(n)).join('') + `<a class="add" href="#upload">${L('Add a spot', 'Spot hinzufügen')}</a>`;
+  const langBtns = `<span class="lang" role="group" aria-label="Language"><button data-act="lang" data-v="en" aria-pressed="${S.lang === 'en'}">EN</button><button data-act="lang" data-v="de" aria-pressed="${S.lang === 'de'}">DE</button></span>`;
+  const themeBtn = `<button class="ibtn" data-act="theme" aria-label="${L('Switch light/dark mode', 'Hell/Dunkel umschalten')}">${ic(S.theme === 'dark' ? 'sun' : 'moon')}</button>`;
   return `<a class="skip" href="#home" data-act="skip">${L('Skip to content', 'Zum Inhalt springen')}</a>
-<header class="top"><div class="wrap topg">
-<a class="brand" href="#home"><span class="plate"><i></i><b>VCR</b><i></i></span>Vienna Car Registry</a>
+<header class="top"><div class="topg">
+<button class="ibtn burger" data-act="menu" aria-label="${L('Menu', 'Menü')}" aria-expanded="${S.menu}">${ic('menu')}</button>
+<a class="brand" href="#home"><span class="plate"><i></i><b>VCR</b><i></i></span><span class="bn">Vienna Car Registry</span></a>
 <nav class="main-nav" aria-label="Main">${links}</nav>
 <div class="tools">
-<span class="seg2" role="group" aria-label="Language"><button data-act="lang" data-v="en" aria-pressed="${S.lang === 'en'}">EN</button><button data-act="lang" data-v="de" aria-pressed="${S.lang === 'de'}">DE</button></span>
-<button class="ibtn" data-act="theme" aria-label="${L('Switch light/dark mode', 'Hell/Dunkel umschalten')}">${ic(S.theme === 'dark' ? 'sun' : 'moon')}</button>
+<form class="hsearch" role="search" data-form="search"><label class="sr" for="hs">${L('Search', 'Suche')}</label><input id="hs" name="q" type="search" placeholder="${L('Search', 'Suche')}" autocomplete="off"><button type="submit" aria-label="${L('Search', 'Suchen')}">${ic('search')}</button></form>
+<span class="add-d">${langBtns}${themeBtn}</span>
 ${S.me ? `<button class="ibtn" data-act="bell" aria-label="${L('Notifications', 'Benachrichtigungen')}" aria-expanded="${S.notifOpen}">${ic('bell')}${unread ? `<span class="dot">${unread}</span>` : ''}</button>
 <a class="ibtn" href="#messages" aria-label="${L('Messages', 'Nachrichten')}">${ic('mail')}</a>
-<a href="#profile-${esc(S.me.username)}" aria-label="${L('My profile', 'Mein Profil')}">${av(S.me, 38)}</a>`
-    : `<button class="btn ghost sm" data-act="login">${L('Sign in', 'Anmelden')}</button>`}
-<a class="btn sm" href="#upload">${L('Add a spot', 'Spot hinzufügen')}</a>
+<a href="#profile-${esc(S.me.username)}" aria-label="${L('My profile', 'Mein Profil')}">${av(S.me, 32)}</a>`
+    : `<button class="ibtn" data-act="login" aria-label="${L('Sign in', 'Anmelden')}">${ic('user')}</button>`}
 </div></div>
+<nav class="mnav" aria-label="Menu" ${S.menu ? '' : 'hidden'}>${nav.map(n => lk(n)).join('')}<a href="#upload">${L('Add a spot', 'Spot hinzufügen')}</a><a href="#pro">Pro</a>
+<div class="row" style="padding:6px 4px">${langBtns}${themeBtn}</div></nav>
 ${S.notifOpen && S.me ? notifPanel() : ''}</header>`;
 }
 function notifPanel() {
   return `<div class="notif"><div class="row" style="justify-content:space-between;padding:10px 0 4px"><strong>${L('Notifications', 'Benachrichtigungen')}</strong><button class="linkb sm" data-act="readall">${L('Mark all read', 'Alle gelesen')}</button></div><ul>${S.notes.length ? S.notes.map(n => `<li class="${n.read ? '' : 'un'}">${esc(S.lang === 'de' ? n.text_de : n.text_en)}</li>`).join('') : `<li>${L('Nothing yet.', 'Noch nichts.')}</li>`}</ul></div>`;
 }
 function footer() {
-  return `<footer class="foot"><div class="wrap"><span>Vienna Car Registry · ${L('Built by spotters, checked by admins.', 'Von Spottern gebaut, von Admins geprüft.')}</span><span><a href="#pro">Pro</a>${S.me && !isAdmin() ? ` · <a href="#apply">${L('Become an admin', 'Admin werden')}</a>` : ''}${S.me ? ` · <button class="linkb" data-act="logout">${L('Sign out', 'Abmelden')}</button>` : ''}</span></div></footer>`;
+  return `<button class="totop" data-act="top" aria-label="${L('Back to top', 'Nach oben')}">${ic('up')}</button>
+<footer class="foot"><div class="fg"><div class="fb"><a class="brand" href="#home"><span class="plate"><i></i><b>VCR</b><i></i></span><span>Vienna Car Registry</span></a>
+<p class="tag2">${L('Spotted in Vienna. Checked by admins.', 'In Wien gespottet. Von Admins geprüft.')}</p></div>
+<div class="cols2"><div class="col"><p>${L('Resources', 'Ressourcen')}</p><a href="#cars">${L('Cars', 'Autos')}</a><a href="#archive">${L('Archive', 'Archiv')}</a><a href="#events">Events</a><a href="#ranking">Ranking</a></div>
+<div class="col"><p>${L('Community', 'Community')}</p><a href="#upload">${L('Add a spot', 'Spot hinzufügen')}</a><a href="#pro">Pro</a>${S.me && !isAdmin() ? `<a href="#apply">${L('Become an admin', 'Admin werden')}</a>` : ''}${S.me ? `<button data-act="logout">${L('Sign out', 'Abmelden')}</button>` : `<button data-act="login">${L('Sign in', 'Anmelden')}</button>`}</div></div></div>
+<p class="copy">© ${new Date().getFullYear()} Vienna Car Registry. ${L('All rights reserved.', 'Alle Rechte vorbehalten.')}</p></footer>`;
 }
-const head = (t, sub) => `<section class="wrap ph0"><h1 style="font-size:clamp(34px,5vw,56px)">${t}</h1>${sub ? `<p>${sub}</p>` : ''}</section>`;
+const head = (t, sub) => `<section class="wrap ph0"><h1>${t}</h1>${sub ? `<p>${sub}</p>` : ''}</section>`;
 const gate = (title, txt) => head(title, txt) + `<div class="wrap sec"><button class="btn" data-act="login">${L('Sign in or create account', 'Anmelden oder Konto erstellen')}</button></div>`;
 const notFound = guest => head(L('Not found', 'Nicht gefunden'), L('This page does not exist, or it is not public.', 'Diese Seite gibt es nicht oder sie ist nicht öffentlich.')) + `<div class="wrap sec"><div class="row"><a class="btn" href="#home">${L('Back to the registry', 'Zurück zum Register')}</a>${guest && !S.me ? `<button class="btn ghost" data-act="login">${L('Sign in', 'Anmelden')}</button>` : ''}</div></div>`;
 const loadingHTML = () => `<div class="loading" role="status">${L('Loading…', 'Lädt …')}</div>`;
@@ -142,35 +174,64 @@ function filtered() {
 }
 function gridHTML() {
   const a = filtered();
-  if (!S.list.length) return `<div class="empty"><h2>${L('No spots yet', 'Noch keine Spots')}</h2><p>${L('Be the first to add a car you saw in Vienna.', 'Lade als Erste oder Erster ein Auto hoch, das du in Wien gesehen hast.')}</p><a class="btn" href="#upload">${L('Add a spot', 'Spot hinzufügen')}</a></div>`;
-  if (!a.length) return `<div class="empty"><h2>${L('No cars match these filters', 'Keine Autos für diese Filter')}</h2><p>${L('Try another colour or model, or clear the filters.', 'Probiere eine andere Farbe oder ein anderes Modell oder setze die Filter zurück.')}</p><button class="btn ghost" data-act="clear">${L('Clear filters', 'Filter zurücksetzen')}</button></div>`;
-  return `<div class="grid">${a.map(tile).join('')}</div>`;
+  if (!S.list.length) return `<div class="car_list"><div class="empty"><h2>${L('No spots yet', 'Noch keine Spots')}</h2><p>${L('Be the first to add a car you saw in Vienna.', 'Lade als Erste oder Erster ein Auto hoch, das du in Wien gesehen hast.')}</p><a class="btn" href="#upload">${L('Add a spot', 'Spot hinzufügen')}</a></div></div>`;
+  if (!a.length) return `<div class="car_list"><div class="empty"><h2>${L('No cars match these filters', 'Keine Autos für diese Filter')}</h2><p>${L('Try another colour or model, or clear the filters.', 'Probiere eine andere Farbe oder ein anderes Modell oder setze die Filter zurück.')}</p><button class="btn" data-act="clear">${L('Clear filters', 'Filter zurücksetzen')}</button></div></div>`;
+  const shown = a.slice(0, S.f.n);
+  return `<div class="car_list">${shown.map(tile).join('')}</div>${a.length > shown.length ? `<div class="more"><button class="btn" data-act="more">${L('See more', 'Mehr anzeigen')}</button></div>` : ''}`;
 }
-const countText = () => { const n = filtered().length; return L(`${n} ${n === 1 ? 'car' : 'cars'}`, `${n} ${n === 1 ? 'Auto' : 'Autos'}`); };
+const countText = () => { const n = filtered().length; return L(`(${n} ${n === 1 ? 'Car' : 'Cars'} found)`, `(${n} ${n === 1 ? 'Auto' : 'Autos'} gefunden)`); };
+const stat = (i, n, l) => `<div class="stat"><span class="n">${ic(i)}${n}</span><span class="l">${l}</span></div>`;
+const blockTitle = (t, sub) => `<h2 class="blocktitle">${t}${sub ? `<span class="sub">${sub}</span>` : ''}</h2>`;
 
 async function pageHome() {
+  S.list = await cached('reg', () => api.listSpots('registry'));
+  const evs = await cached('events', () => api.listEvents()).catch(() => []);
+  const vis = S.list.filter(s => !S.blocked.has(s.user_id));
+  const brands = [...new Set(S.models.map(m => m.brand))];
+  const nModels = new Set(vis.map(s => s.model_id)).size, nDist = new Set(vis.map(s => s.district)).size;
+  const nLikes = vis.reduce((t, s) => t + (s.likes || 0), 0);
+  const pop = vis.slice().sort(S.homeTab === 'new' ? (x, y) => y.id - x.id : (x, y) => (y.likes - x.likes) || (y.id - x.id)).slice(0, 8);
+  const today = new Date().toISOString().slice(0, 10);
+  const up = evs.filter(e => e.starts_on >= today).slice(0, 4);
+  const mo = d => new Date(d + 'T12:00:00').toLocaleDateString(S.lang === 'de' ? 'de-AT' : 'en-GB', { month: 'short', year: 'numeric' });
+  const perBrand = b => { const ms = S.models.filter(m => m.brand === b), ids = new Set(ms.map(m => m.id)); return [ms.length, vis.filter(s => ids.has(s.model_id)).length]; };
+  const brandCards = brands.slice(0, 14).map(b => { const c = perBrand(b); return `<button class="brandc" data-act="brandf" data-v="${esc(b)}"><span class="logo" aria-hidden="true">${esc(b[0])}</span><b>${esc(b)}</b><div class="cnts"><div><strong>${c[0]}</strong><span>${c[0] === 1 ? L('Model', 'Modell') : L('Models', 'Modelle')}</span></div><div><strong>${c[1]}</strong><span>${c[1] === 1 ? L('Car', 'Auto') : L('Cars', 'Autos')}</span></div></div></button>`; }).join('');
+  const modCards = S.models.slice(0, 10).map(m => {
+    const ss = vis.filter(s => s.model_id === m.id).sort((x, y) => (y.likes - x.likes) || (y.id - x.id)), sp = S.specs[m.id] || {};
+    const ph = ss.find(x => (x.photos || []).length);
+    const facts = [sp.engine, sp.power, sp.year].filter(Boolean).join(' · ');
+    return `<button class="modc" data-act="modelf" data-v="${esc(m.id)}"><div class="image">${ph ? photoHTML(ph, 0) : `<div class="nophoto"><span>${esc(m.brand)}</span></div>`}</div><div class="t"><b>${esc(m.brand)} ${esc(m.name)}</b><p>${esc(facts) || (ss.length ? `${ss.length} ${ss.length === 1 ? L('spot in Vienna', 'Spot in Wien') : L('spots in Vienna', 'Spots in Wien')}` : L('No spots in Vienna yet.', 'Noch keine Spots in Wien.'))}</p></div></button>`;
+  }).join('');
+  const cat = (href, i, n, t, d) => `<a class="cat" href="#${href}"><span class="upd">${ic(i)}${n}</span><div class="in"><h3>${t}</h3><p>${d}</p><span class="go">${L('Explore category', 'Kategorie ansehen')} →</span></div></a>`;
+  return `<section class="wrap hero"><p class="welcome">${L('Welcome to', 'Willkommen bei')}</p><h1>Vienna Car Registry</h1>
+<p class="lead">${L('Explore the exclusive cars spotted in Vienna, with official data and paint names.', 'Entdecke die exklusiven Autos, die in Wien gespottet wurden, mit offiziellen Daten und Lacknamen.')}</p>
+<form class="bigsearch" role="search" data-form="search"><label class="sr" for="q">${L('Search', 'Suche')}</label><input id="q" name="q" type="search" placeholder="${L('Search for Make or Model', 'Marke oder Modell suchen')}" autocomplete="off"><button type="submit" aria-label="${L('Search', 'Suchen')}">${ic('search')}</button></form>
+<div class="stats">${stat('car', vis.length, L('Cars registered', 'Autos im Register'))}${stat('star', nModels, L('Models', 'Modelle'))}${stat('pin', nDist, L('Districts', 'Bezirke'))}${stat('heart', nLikes, L('Likes', 'Likes'))}</div></section>
+<section class="wrap blk" id="reg">${blockTitle(L('Most Popular', 'Beliebteste'), L('(Most liked)', '(Meiste Likes)'))}
+<div class="selection" role="group" aria-label="${L('Sort', 'Sortierung')}"><button data-act="hometab" data-v="likes" aria-pressed="${S.homeTab === 'likes'}">${L('Likes', 'Likes')}</button><button data-act="hometab" data-v="new" aria-pressed="${S.homeTab === 'new'}">${L('Latest', 'Neueste')}</button></div>
+${pop.length ? `<div class="car_list">${pop.map(tile).join('')}</div>` : gridHTML()}
+${vis.length ? `<div class="more"><a class="btn" href="#cars">${L('See more', 'Mehr anzeigen')}</a></div>` : ''}</section>
+${up.length ? `<section class="wrap blk">${blockTitle(L('Latest Events', 'Nächste Events'))}<div class="car_list">${up.map(e => `<a class="car_item" href="#events"><div class="texto"><p class="title"><span class="t">${esc(e.title)}</span></p><div class="icons_row">${ico('cal', `${+e.starts_on.slice(8, 10)} ${mo(e.starts_on)}`, L('Date', 'Datum'))}${e.place || e.district ? ico('pin', esc(e.place || distLabel(e.district)), L('Place', 'Ort')) : ''}</div></div></a>`).join('')}</div><div class="more"><a class="btn" href="#events">${L('See more', 'Mehr anzeigen')}</a></div></section>` : ''}
+${brands.length ? `<section class="wrap blk">${blockTitle(L('Explore - Make', 'Entdecken - Marken'))}<div class="brands">${brandCards}</div></section>` : ''}
+${S.models.length ? `<section class="wrap blk">${blockTitle(L('Explore - Models', 'Entdecken - Modelle'))}<div class="models">${modCards}</div><div class="more"><a class="btn" href="#cars">${L('See more', 'Mehr anzeigen')}</a></div></section>` : ''}
+<section class="wrap blk"><p class="tagline">${L('Every spot is checked by an admin before it goes live.', 'Jeder Spot wird von einem Admin geprüft, bevor er online geht.')}</p>
+<div class="cats">${cat('cars', 'car', vis.length, L('Cars', 'Autos'), L('Browse every exclusive car spotted in Vienna.', 'Alle exklusiven Autos ansehen, die in Wien gespottet wurden.'))}${cat('archive', 'lock', '', L('Archive', 'Archiv'), L('Ex-Viennese cars, visitors and event cars. Part of Pro.', 'Ex-Wiener Autos, Besucher und Event-Autos. Teil von Pro.'))}${cat('events', 'cal', up.length, 'Events', L('Meets and shows in and around Vienna.', 'Treffen und Shows in und um Wien.'))}${cat('ranking', 'star', '', 'Ranking', L('The spotters with the most approved uploads.', 'Die Spotter mit den meisten freigegebenen Uploads.'))}</div></section>`;
+}
+
+async function pageCars() {
   S.list = await cached('reg', () => api.listSpots('registry'));
   const f = S.f;
   const brands = [...new Set(S.models.map(m => m.brand))];
   const models = S.models.filter(m => !f.brand || m.brand === f.brand);
-  const vis = S.list.filter(s => !S.blocked.has(s.user_id));
-  const nModels = new Set(vis.map(s => s.model_id)).size, nDist = new Set(vis.map(s => s.district)).size;
-  const stat = (i, n, l) => `<div class="stat">${ic(i)}<b>${n}</b><span>${l}</span></div>`;
-  const perBrand = b => { const ms = S.models.filter(m => m.brand === b), ids = new Set(ms.map(m => m.id)); return [ms.length, vis.filter(s => ids.has(s.model_id)).length]; };
-  const brandCards = brands.map(b => { const c = perBrand(b); return `<button class="brandc" data-act="brandf" data-v="${esc(b)}"><b>${esc(b)}</b><span>${c[0]} ${c[0] === 1 ? L('model', 'Modell') : L('models', 'Modelle')}</span><span>${c[1]} ${c[1] === 1 ? L('car', 'Auto') : L('cars', 'Autos')}</span></button>`; }).join('');
-  return `<section class="wrap hero"><p class="welcome">${L('Welcome to', 'Willkommen bei')}</p><h1>VIENNA CAR REGISTRY</h1>
-<p class="lead">${L("Discover Vienna's finest automobiles. Every spot is checked by an admin and shown with official data and paint names.", 'Entdecke Wiens feinste Automobile. Jeder Spot wird von einem Admin geprüft und mit offiziellen Daten und Lacknamen gezeigt.')}</p>
-<form class="bigsearch" role="search" data-form="search"><label class="sr" for="q">${L('Search', 'Suche')}</label><input id="q" type="search" placeholder="${L('Search for brand, model or paint', 'Marke, Modell oder Lack suchen')}" value="${esc(f.q)}" autocomplete="off"><button type="submit" aria-label="${L('Search', 'Suchen')}">${ic('search')}</button></form>
-<div class="stats">${stat('car', vis.length, L('Cars registered', 'Autos im Register'))}${stat('star', nModels, L('Models spotted', 'Modelle gespottet'))}${stat('pin', nDist, L('Districts', 'Bezirke'))}</div></section>
-<section class="wrap" id="reg"><div class="blockhead"><h2>${L('The registry', 'Das Register')}</h2>
-<div class="tabs" role="group" aria-label="${L('Sort', 'Sortierung')}"><button data-act="sort" data-v="new" aria-pressed="${f.sort === 'new'}">${L('Newest', 'Neueste')}</button><button data-act="sort" data-v="likes" aria-pressed="${f.sort === 'likes'}">${L('Most liked', 'Meiste Likes')}</button></div></div>
-<div class="filters">
-<label class="sr" for="fb">${L('Brand', 'Marke')}</label><select class="fi" id="fb"><option value="">${L('All brands', 'Alle Marken')}</option>${brands.map(b => `<option${f.brand === b ? ' selected' : ''}>${esc(b)}</option>`).join('')}</select>
-<label class="sr" for="fm">${L('Model', 'Modell')}</label><select class="fi" id="fm"><option value="">${L('All models', 'Alle Modelle')}</option>${models.map(m => `<option value="${esc(m.id)}"${f.model === m.id ? ' selected' : ''}>${esc(m.name)}</option>`).join('')}</select>
-<div class="swatches" role="group" aria-label="${L('Colour', 'Farbe')}">${Object.keys(COLORS).map(k => `<button class="sw" data-act="colorf" data-v="${k}" style="background:${COLORS[k].hex}" aria-pressed="${f.color === k}" aria-label="${cn(k)}" title="${cn(k)}"></button>`).join('')}</div>
-<span class="count" id="count">${countText()}</span></div>
-<div id="gridwrap">${gridHTML()}</div></section>
-${brands.length ? `<section class="wrap sec"><h2>${L('Explore by brand', 'Nach Marke entdecken')}</h2><div class="brands">${brandCards}</div></section>` : ''}`;
+  return `<section class="wrap pagehead"><h1>${L('Search Cars', 'Autos suchen')} <small id="count">${countText()}</small></h1></section>
+<section class="wrap" id="reg"><form class="box_fields" data-form="filters" role="search">
+<div class="f big"><label for="q">${L('Search', 'Suche')}</label><input id="q" type="search" placeholder="${L('Make, model or paint', 'Marke, Modell oder Lack')}" value="${esc(f.q)}" autocomplete="off"></div>
+<div class="f"><label for="fb">${L('Make', 'Marke')}</label><select id="fb"><option value="">${L('All brands', 'Alle Marken')}</option>${brands.map(b => `<option${f.brand === b ? ' selected' : ''}>${esc(b)}</option>`).join('')}</select></div>
+<div class="f"><label for="fm">${L('Model', 'Modell')}</label><select id="fm"><option value="">${L('All models', 'Alle Modelle')}</option>${models.map(m => `<option value="${esc(m.id)}"${f.model === m.id ? ' selected' : ''}>${esc(m.name)}</option>`).join('')}</select></div>
+<div class="f"><label for="fc">${L('Colour', 'Farbe')}</label><select id="fc"><option value="">${L('All colours', 'Alle Farben')}</option>${Object.keys(COLORS).map(k => `<option value="${k}"${f.color === k ? ' selected' : ''}>${cn(k)}</option>`).join('')}</select></div>
+<div class="btns"><button type="button" class="btn ghost sm" data-act="clear">${L('Reset', 'Zurücksetzen')}</button><button type="submit" class="btn sm fill">${L('Search', 'Suchen')}</button></div></form>
+<div class="selection" role="group" aria-label="${L('Sort', 'Sortierung')}"><button data-act="sort" data-v="new" aria-pressed="${f.sort === 'new'}">${L('Newest', 'Neueste')}</button><button data-act="sort" data-v="likes" aria-pressed="${f.sort === 'likes'}">${L('Most liked', 'Meiste Likes')}</button></div>
+<div id="gridwrap">${gridHTML()}</div></section>`;
 }
 
 function lockedArchive() {
@@ -180,7 +241,7 @@ function lockedArchive() {
 async function pageArchive() {
   if (!isPro()) return lockedArchive();
   const a = (await cached('arc', () => api.listSpots('archive'))).filter(s => !S.blocked.has(s.user_id));
-  const grp = k => { const g = a.filter(s => s.arch_kind === k); return g.length ? `<h2>${ARCHG[k][S.lang === 'de' ? 1 : 0]}</h2><div class="grid">${g.map(tile).join('')}</div>` : ''; };
+  const grp = k => { const g = a.filter(s => s.arch_kind === k); return g.length ? `<h2>${ARCHG[k][S.lang === 'de' ? 1 : 0]}</h2><div class="car_list">${g.map(tile).join('')}</div>` : ''; };
   return head('Vienna Archives', L('Cars that left Vienna, visited it, or showed up at an event.', 'Autos, die Wien verlassen haben, zu Besuch waren oder bei einem Event auftauchten.'))
     + `<div class="wrap sec">${a.length ? grp('ex') + grp('visit') + grp('event') : `<p class="mute">${L('The archive is empty so far.', 'Das Archiv ist noch leer.')}</p>`}</div>`;
 }
@@ -190,50 +251,62 @@ async function pageCar(id) {
   const d = await cached('car' + id, () => api.getSpot(id));
   if (!d) return notFound(true);
   const s = d.spot, m = modelOf(s.model_id);
-  s.photos = d.photos;
-  const n = Math.max(d.photos.length, 1), pi = Math.min(S.pi, n - 1);
+  s.photos = d.photos; S.carPhotos = d.photos;
+  const n = d.photos.length, pi = Math.min(S.pi, Math.max(n - 1, 0));
   const owner = d.authors[s.user_id];
   const mine = S.me && S.me.id === s.user_id;
   const sp = S.specs[s.model_id] || {};
-  const thumbs = n > 1 ? `<div class="thumbs">${Array.from({ length: n }, (_, i) => `<button data-act="thumb" data-i="${i}" aria-label="${L('Photo', 'Foto')} ${i + 1}" ${i === pi ? 'aria-current="true"' : ''}>${photoHTML(s, i)}</button>`).join('')}</div>` : '';
+  // Galerie: ein großes Bild links, bis zu vier kleine rechts
+  const others = d.photos.map((u, i) => i).filter(i => i !== pi).slice(0, 4);
+  const gcls = n <= 1 ? 'g1' : others.length === 1 ? 'g2' : others.length === 2 ? 'g3' : 'g4';
+  const small = others.map((i, k) => `<button class="thumb" data-act="thumb" data-i="${i}" aria-label="${L('Photo', 'Foto')} ${i + 1}">${photoHTML(s, i)}${k === 3 && n > 5 ? `<span class="more_ph">${L('All Photos', 'Alle Fotos')} (${n})</span>` : ''}</button>`).join('');
+  const gallery = `<div class="banner_gallery ${gcls}"><button class="thumb" data-act="allphotos" aria-label="${L('Show all photos', 'Alle Fotos anzeigen')}">${photoHTML(s, pi)}</button>${small}</div>`;
   const pr = s.paint ? (S.paints[s.model_id] || []).find(x => x.name === s.paint) : null;
-  const pub = [[s.paint ? L('Paint', 'Lack') : L('Colour', 'Farbe'), s.paint ? `${pr ? `<i class="swd" style="background:${esc(pr.hex)}"></i>` : ''}${esc(s.paint)} <span class="mute sm">${cn(s.color)}</span>` : cn(s.color)], [L('District', 'Bezirk'), esc(distLabel(s.district))]];
-  if (s.kind === 'archive') pub.push([L('Archive', 'Archiv'), archL(s.arch_kind)]);
   const dash = v => (v == null || v === '' ? '—' : esc(v));
-  const priv = [
-    [L('Engine', 'Motor'), dash(sp.engine)], [L('Power', 'Leistung'), dash(sp.power)], [L('Transmission', 'Getriebe'), dash(sp.transmission)],
-    [L('Drive', 'Antrieb'), dash(sp.drive)], [L('Year', 'Baujahr'), dash(sp.year)],
-    [L('Production no.', 'Produktionsnr.'), d.details && d.details.prod_no ? `${esc(d.details.prod_no)}${sp.production ? ' / ' + sp.production : ''}` : '—'],
-    [L('Spotted', 'Gesehen am'), fd((d.details && d.details.spotted_on) || s.created_at)], [L('Spotted by', 'Gespottet von'), uLink(owner)]
-  ];
-  const rows = r => r.map(x => `<div><dt>${x[0]}</dt><dd>${x[1]}</dd></div>`).join('');
+  const login = `<button class="pill" data-act="login">${ic('user')} ${L('Log in', 'Anmelden')}</button>`;
+  const row = (i, k, v) => `<div><span class="ico">${ic(i)}</span><div class="vwrap"><span class="k">${k}</span><span class="v">${v}</span></div></div>`;
+  const mem = v => (S.me ? v : login);
+  const detRows = row('pal', s.paint ? L('Paint', 'Lack') : L('Colour', 'Farbe'), s.paint ? `${pr ? `<i class="swd" style="background:${esc(pr.hex)}"></i>` : ''}${esc(s.paint)}` : esc(cn(s.color)))
+    + (s.paint ? row('drop', L('Colour family', 'Farbgruppe'), esc(cn(s.color))) : '')
+    + row('pin', L('District', 'Bezirk'), esc(distLabel(s.district)))
+    + row('hash', L('Production no.', 'Produktionsnr.'), mem(d.details && d.details.prod_no ? `${esc(d.details.prod_no)}${sp.production ? ' / ' + sp.production : ''}` : '—'));
+  const specRows = row('eng', L('Engine', 'Motor'), mem(dash(sp.engine))) + row('bolt', L('Power', 'Leistung'), mem(dash(sp.power))) + row('gear', L('Transmission', 'Getriebe'), mem(dash(sp.transmission)))
+    + row('wheel', L('Drive', 'Antrieb'), mem(dash(sp.drive))) + row('cal', L('Year', 'Baujahr'), mem(dash(sp.year)))
+    + (S.me && sp.source && /^https:\/\//.test(sp.source) ? `<p class="src">${L('Source of the technical data:', 'Quelle der technischen Daten:')} <a href="${esc(sp.source)}" target="_blank" rel="noopener noreferrer">${esc(sp.source.replace(/^https:\/\/(www\.)?/, '').split('/')[0])}</a></p>` : '');
+  const tab = S.ptab === 'specs' ? 'specs' : 'details';
+  const panel = `<aside class="panel"><div class="ptabs" role="group" aria-label="${L('Car data', 'Fahrzeugdaten')}"><button data-act="ptab" data-v="details" aria-pressed="${tab === 'details'}">${ic('info')}${L('Details', 'Details')}</button><button data-act="ptab" data-v="specs" aria-pressed="${tab === 'specs'}">${ic('spec')}${L('Specifics', 'Technik')}</button></div>
+<div class="pbody"><dl class="facts">${tab === 'details' ? detRows : specRows}</dl></div></aside>`;
   const liked = S.likes.has(s.id), fav = S.favs.has(s.id);
-  const likeCount = d.likes;
   const cs = d.comments.filter(c => !S.blocked.has(c.user_id));
   let pend = '';
-  if (s.status === 'pending') pend = `<div class="banner">${isAdmin() && !mine ? L('This spot waits for review.', 'Dieser Spot wartet auf Prüfung.') : L('Only you can see this spot until an admin approves it.', 'Nur du siehst diesen Spot, bis ein Admin ihn freigibt.')}${isAdmin() ? `<div class="row" style="margin-top:10px"><button class="btn sm" data-act="approve" data-id="${s.id}">${L('Approve', 'Freigeben')}</button><button class="btn red sm" data-act="reject" data-id="${s.id}">${L('Reject', 'Ablehnen')}</button></div>` : ''}</div>`;
-  if (s.status === 'rejected') pend = `<div class="banner bad">${L('This spot was not accepted.', 'Dieser Spot wurde nicht angenommen.')}</div>`;
+  if (s.status === 'pending') pend = `<div class="banner" style="margin-top:14px">${isAdmin() && !mine ? L('This spot waits for review.', 'Dieser Spot wartet auf Prüfung.') : L('Only you can see this spot until an admin approves it.', 'Nur du siehst diesen Spot, bis ein Admin ihn freigibt.')}${isAdmin() ? `<div class="row" style="margin-top:10px"><button class="btn sm" data-act="approve" data-id="${s.id}">${L('Approve', 'Freigeben')}</button><button class="btn red sm" data-act="reject" data-id="${s.id}">${L('Reject', 'Ablehnen')}</button></div>` : ''}</div>`;
+  if (s.status === 'rejected') pend = `<div class="banner bad" style="margin-top:14px">${L('This spot was not accepted.', 'Dieser Spot wurde nicht angenommen.')}</div>`;
   const commentForm = banned()
     ? `<div class="banner bad">${L('Your account is suspended after three warnings. You can read, but not comment.', 'Dein Konto ist nach drei Verwarnungen gesperrt. Du kannst lesen, aber nicht kommentieren.')}</div>`
-    : s.status !== 'approved' ? '' : `<form data-form="comment" class="stack" style="margin:12px 0 6px"><label class="sr" for="ct">${L('Your comment', 'Dein Kommentar')}</label><textarea id="ct" name="text" rows="2" maxlength="400" placeholder="${L('Add a comment', 'Kommentar schreiben')}" style="border:1.5px solid var(--line);background:var(--surface);border-radius:10px;padding:10px 12px;width:100%"></textarea><div class="row"><button class="btn sm" type="submit">${L('Post comment', 'Kommentar senden')}</button><span class="hint" style="margin:0">${L('Bad language is filtered and earns a warning.', 'Schimpfwörter werden gefiltert und führen zu einer Verwarnung.')}</span></div></form>`;
+    : s.status !== 'approved' ? '' : `<form data-form="comment" class="stack" style="margin:12px 0 6px"><label class="sr" for="ct">${L('Your comment', 'Dein Kommentar')}</label><textarea id="ct" name="text" rows="2" maxlength="400" placeholder="${L('Add a comment', 'Kommentar schreiben')}"></textarea><div class="row"><button class="btn sm" type="submit">${L('Post comment', 'Kommentar senden')}</button><span class="hint" style="margin:0">${L('Bad language is filtered and earns a warning.', 'Schimpfwörter werden gefiltert und führen zu einer Verwarnung.')}</span></div></form>`;
   const comments = S.me
-    ? `<h2 style="margin-top:34px">${L('Comments', 'Kommentare')} (${cs.length})</h2>${commentForm}
+    ? `<h2>${L('Comments', 'Kommentare')} (${cs.length})</h2>${commentForm}
 ${cs.map(c => `<div class="cm">${av(d.authors[c.user_id], 36)}<div><div class="meta">${uLink(d.authors[c.user_id])} · ${fd(c.created_at)}${c.filtered ? ` · <span class="tag warn">${L('Filtered', 'Gefiltert')}</span>` : ''}</div><p>${esc(c.body)}</p>${c.user_id !== S.me.id ? `<button class="linkb sm mute" data-act="report" data-k="comment" data-id="${s.id}" data-cid="${c.id}">${L('Report comment', 'Kommentar melden')}</button>` : ''}</div></div>`).join('')}`
-    : `<div class="lock">${ic('lock')}<div><p><strong>${L('Comments and full details are for members.', 'Kommentare und alle Details sind für Mitglieder.')}</strong><br>${L('Create a free account to read and write comments and see the full spec.', 'Erstelle ein kostenloses Konto, um Kommentare zu lesen und zu schreiben und alle Daten zu sehen.')}</p><button class="btn sm" data-act="login">${L('Sign in or create account', 'Anmelden oder Konto erstellen')}</button></div></div>`;
-  return `<div class="wrap"><p class="sm" style="padding-top:18px;margin:0"><a href="${s.kind === 'archive' ? '#archive' : '#home'}">← ${s.kind === 'archive' ? L('Archive', 'Archiv') : L('Registry', 'Register')}</a></p>
-<div class="carg"><div class="gal"><div class="big">${photoHTML(s, pi)}</div>${thumbs}</div>
-<div><div class="row" style="margin-bottom:10px">${plate(s, true)}${s.status === 'pending' ? `<span class="tag warn">${L('Waiting for approval', 'Wartet auf Freigabe')}</span>` : ''}</div>
-<h1 style="font-size:clamp(32px,4vw,46px)">${esc(spotName(s))}</h1>${pend}
-<dl class="facts">${rows(pub)}${S.me ? rows(priv) : ''}</dl>
-${S.me && sp.source && /^https:\/\//.test(sp.source) ? `<p class="src">${L('Source of the technical data:', 'Quelle der technischen Daten:')} <a href="${esc(sp.source)}" target="_blank" rel="noopener noreferrer">${esc(sp.source.replace(/^https:\/\/(www\.)?/, '').split('/')[0])}</a></p>` : ''}
-${S.me ? '' : `<div class="lock">${ic('lock')}<div><p>${L('Engine, transmission, production number and more are visible with an account.', 'Motor, Getriebe, Produktionsnummer und mehr siehst du mit einem Konto.')}</p><button class="btn sm" data-act="login">${L('Sign in', 'Anmelden')}</button></div></div>`}
-<div class="row" style="margin-top:20px">
-<button class="btn ghost sm" data-act="like" data-id="${s.id}" aria-pressed="${liked}">${ic('heart')} ${likeCount}</button>
-<button class="btn ghost sm" data-act="fav" data-id="${s.id}" aria-pressed="${fav}">${ic('star')} ${fav ? L('Saved', 'Gespeichert') : L('Save', 'Speichern')}</button>
-${mine ? `<button class="btn ghost sm" data-act="edit" data-id="${s.id}">${ic('pen')} ${L('Edit', 'Bearbeiten')}</button>` : ''}
-<button class="btn ghost sm" data-act="report" data-k="spot" data-id="${s.id}">${ic('flag')} ${L('Report', 'Melden')}</button></div>
-</div></div>
-<div style="max-width:760px;padding-bottom:60px">${comments}</div></div>`;
+    : `<h2>${L('Comments', 'Kommentare')}</h2><div class="lock">${ic('lock')}<div><p><strong>${L('Comments and full details are for members.', 'Kommentare und alle Details sind für Mitglieder.')}</strong><br>${L('Create a free account to read and write comments and see the full spec.', 'Erstelle ein kostenloses Konto, um Kommentare zu lesen und zu schreiben und alle Daten zu sehen.')}</p><button class="btn sm" data-act="login">${L('Sign in or create account', 'Anmelden oder Konto erstellen')}</button></div></div>`;
+  const info = `<div class="card"><h2>${L('Information', 'Information')}</h2><dl class="infolist">
+<div><dt>${L('Listed in', 'Eingetragen in')}</dt><dd>${s.kind === 'archive' ? `${L('Archive', 'Archiv')}: ${archL(s.arch_kind)}` : L('Registry', 'Register')}</dd></div>
+<div><dt>${L('Spotted', 'Gesehen am')}</dt><dd>${mem(fd((d.details && d.details.spotted_on) || s.created_at))}</dd></div>
+<div><dt>${L('Spotted by', 'Gespottet von')}</dt><dd>${mem(uLink(owner))}</dd></div></dl></div>`;
+  return `<div class="wrap"><p class="crumb"><a href="${s.kind === 'archive' ? '#archive' : '#cars'}">← ${s.kind === 'archive' ? L('Archive', 'Archiv') : L('Cars', 'Autos')}</a></p>
+${gallery}
+<div class="carh"><div class="row pl">${plate(s, true)}${s.status === 'pending' ? `<span class="tag warn">${L('Waiting for approval', 'Wartet auf Freigabe')}</span>` : ''}</div>
+<h1>${esc(spotName(s))}</h1>${pend}
+<p class="loc"><i class="flag" role="img" aria-label="Austria"></i>${esc(distLabel(s.district))}, Wien, ${L('Austria', 'Österreich')}</p></div>
+<div class="statrow">
+<button data-act="like" data-id="${s.id}" aria-pressed="${liked}">${ic('heart')} ${d.likes} ${L('Likes', 'Likes')}</button>
+<a class="lk" href="#comments" data-act="tocomments">${ic('chat')} ${cs.length} ${L('Comments', 'Kommentare')}</a>
+<button data-act="fav" data-id="${s.id}" aria-pressed="${fav}">${ic('star')} ${fav ? L('Saved', 'Gespeichert') : L('Save', 'Speichern')}</button>
+<button data-act="allphotos">${ic('cam')} ${L('All Photos', 'Alle Fotos')} (${n})</button>
+<button data-act="share">${ic('share')} ${L('Share', 'Teilen')}</button>
+<span class="sp"></span>
+${mine ? `<button data-act="edit" data-id="${s.id}">${ic('pen')} ${L('Edit', 'Bearbeiten')}</button>` : ''}
+<button data-act="report" data-k="spot" data-id="${s.id}">${ic('flag')} ${L('Report', 'Melden')}</button></div>
+<div class="cols"><div>${info}<div id="comments" class="card">${comments}</div></div>${panel}</div></div>`;
 }
 
 async function pageEvents() {
@@ -288,7 +361,7 @@ async function pageProfile(name) {
   let favs = '';
   if (me) {
     const fl = await cached('favs', () => api.listFavorites(S.me.id));
-    favs = `<h2 style="margin-top:36px">${L('Saved cars', 'Gespeicherte Autos')}</h2><div class="grid">${fl.length ? fl.map(tile).join('') : `<p class="mute">${L('Nothing saved yet.', 'Noch nichts gespeichert.')}</p>`}</div>`;
+    favs = `<h2 style="margin-top:36px">${L('Saved cars', 'Gespeicherte Autos')}</h2><div class="car_list">${fl.length ? fl.map(tile).join('') : `<p class="mute">${L('Nothing saved yet.', 'Noch nichts gespeichert.')}</p>`}</div>`;
   }
   const actions = me
     ? `<button class="btn ghost sm" data-act="editprofile">${L('Edit profile', 'Profil bearbeiten')}</button><label class="btn ghost sm" style="cursor:pointer">${L('Change photo', 'Foto ändern')}<input type="file" accept="image/*" id="avf" class="sr"></label>`
@@ -301,7 +374,7 @@ async function pageProfile(name) {
 <p class="mute sm" style="margin:6px 0 14px">${L(`${slots} slots: 3 to start, one more for every 5 approved uploads. Everyone can see it.`, `${slots} Plätze: 3 zum Start, einer mehr pro 5 freigegebenen Uploads. Für alle sichtbar.`)}</p>
 <div class="garage">${g}</div>${slots > 12 ? `<p class="hint">${L(`+${slots - 12} more slots unlocked`, `+${slots - 12} weitere Plätze freigeschaltet`)}</p>` : ''}
 <h2 style="margin-top:36px">${L('Spots', 'Spots')}</h2>
-<div class="grid">${spots.length ? spots.map(s => `<div>${tile(s)}${s.status === 'pending' ? `<span class="tag warn" style="margin-top:6px">${L('Waiting for approval', 'Wartet auf Freigabe')}</span>` : s.status === 'rejected' ? `<span class="tag" style="margin-top:6px">${L('Not accepted', 'Nicht angenommen')}</span>` : ''}</div>`).join('') : `<p class="mute">${L('No spots yet.', 'Noch keine Spots.')}</p>`}</div>${favs}</div>`;
+<div class="car_list">${spots.length ? spots.map(s => `<div>${tile(s)}${s.status === 'pending' ? `<span class="tag warn" style="margin-top:6px">${L('Waiting for approval', 'Wartet auf Freigabe')}</span>` : s.status === 'rejected' ? `<span class="tag" style="margin-top:6px">${L('Not accepted', 'Nicht angenommen')}</span>` : ''}</div>`).join('') : `<p class="mute">${L('No spots yet.', 'Noch keine Spots.')}</p>`}</div>${favs}</div>`;
 }
 
 async function pageMessages() {
@@ -438,6 +511,7 @@ ${up || OAUTH_PROVIDERS.length ? `<label class="chk"><input type="checkbox" id="
 <p class="err" id="aerr2"></p><p class="okmsg" id="aok"></p>
 <button class="btn" type="submit">${up ? L('Create account', 'Konto erstellen') : L('Sign in', 'Anmelden')}</button></form>`;
   }
+  if (m.t === 'photos') c = `<h2 id="mt">${L('All photos', 'Alle Fotos')} (${S.carPhotos.length})</h2><div class="allph">${S.carPhotos.map((u, i) => `<button data-act="thumb" data-i="${i}" aria-label="${L('Photo', 'Foto')} ${i + 1}"><img src="${esc(u)}" alt="" loading="lazy"></button>`).join('')}</div>`;
   if (m.t === 'report') c = `<h2 id="mt">${m.k === 'spot' ? L('Report this spot', 'Spot melden') : L('Report this comment', 'Kommentar melden')}</h2>
 <form data-form="report"><div><label for="rr">${L('Reason', 'Grund')}</label><select id="rr" name="reason">${Object.keys(REASONS).map(k => `<option value="${k}">${REASONS[k][S.lang === 'de' ? 1 : 0]}</option>`).join('')}</select></div><div><label for="rn">${L('Details (optional)', 'Details (optional)')}</label><textarea id="rn" name="note" rows="3" maxlength="300"></textarea></div><button class="btn" type="submit">${L('Send report', 'Meldung senden')}</button></form>`;
   if (m.t === 'edit') {
@@ -453,7 +527,7 @@ ${s.kind === 'registry' ? `<div><label for="ear">${L('Ask to move it to the Vien
 <form data-form="profile"><div><label for="pu">${L('Username', 'Benutzername')}</label><input id="pu" name="username" type="text" maxlength="20" value="${esc(S.me.username)}"></div><div><label for="pb">${L('Bio', 'Bio')}</label><textarea id="pb" name="bio" rows="3" maxlength="300">${esc(S.me.bio)}</textarea></div><p class="err" id="perr"></p><button class="btn" type="submit">${L('Save', 'Speichern')}</button></form>`;
   if (m.t === 'modelok') c = `<h2 id="mt">${L('Add model', 'Modell aufnehmen')}</h2><p class="mute sm">${L('Check brand and name. Add the official paints in the Paints tab, and the technical data with its source in Supabase.', 'Prüfe Marke und Namen. Die offiziellen Lacke trägst du im Tab Lacke ein, die technischen Daten mit Quelle in Supabase.')}</p>
 <form data-form="modelok"><div><label for="mb">${L('Brand', 'Marke')}</label><input id="mb" name="brand" type="text" value="${esc(m.brand)}" required></div><div><label for="mn">${L('Name', 'Name')}</label><input id="mn" name="name" type="text" value="${esc(m.name)}" required></div><button class="btn" type="submit">${L('Add model', 'Modell aufnehmen')}</button></form>`;
-  return `<div class="back" data-act="backdrop"><div class="mod" role="dialog" aria-modal="true" aria-labelledby="mt">${x}${c}</div></div>`;
+  return `<div class="back" data-act="backdrop"><div class="mod${m.t === 'photos' ? ' wide' : ''}" role="dialog" aria-modal="true" aria-labelledby="mt">${x}${c}</div></div>`;
 }
 const openModal = m => { S.modal = m; render(); };
 const closeModal = () => { S.modal = null; render(); };
@@ -463,6 +537,7 @@ const needLogin = () => { if (S.me) return false; S.authTab = 'in'; openModal({ 
 async function view() {
   switch (S.route) {
     case 'car': return pageCar(S.arg);
+    case 'cars': return pageCars();
     case 'archive': return pageArchive();
     case 'events': return pageEvents();
     case 'ranking': return pageRanking();
@@ -490,13 +565,13 @@ async function render() {
 function parse() {
   const h = (location.hash || '').slice(1), i = h.indexOf('-');
   const r = i < 0 ? h : h.slice(0, i), a = i < 0 ? '' : decodeURIComponent(h.slice(i + 1));
-  const ok = ['home', 'car', 'archive', 'events', 'ranking', 'upload', 'pro', 'profile', 'messages', 'admin', 'apply'];
+  const ok = ['home', 'cars', 'car', 'archive', 'events', 'ranking', 'upload', 'pro', 'profile', 'messages', 'admin', 'apply'];
   const nr = ok.includes(r) ? r : 'home';
   if (nr !== S.route || a !== S.arg) S.pi = 0;
   S.route = nr; S.arg = a;
 }
 function onRoute() {
-  parse(); S.notifOpen = false;
+  parse(); S.notifOpen = false; S.menu = false;
   const main = $('#main'); if (main) main.innerHTML = loadingHTML();
   render().then(() => window.scrollTo(0, 0));
 }
@@ -537,7 +612,21 @@ async function act(a, d, e, el) {
       const age = $('#age'); if (age && !age.checked) { $('#aerr2').textContent = L('Please confirm that you are 12 or older.', 'Bitte bestätige, dass du mindestens 12 Jahre alt bist.'); break; }
       await api.signInOAuth(d.p); break;
     }
-    case 'thumb': S.pi = +d.i; render(); break;
+    case 'thumb': S.pi = +d.i; S.modal = null; render(); break;
+    case 'menu': S.menu = !S.menu; render(); break;
+    case 'top': window.scrollTo({ top: 0, behavior: 'smooth' }); break;
+    case 'hometab': S.homeTab = d.v; render(); break;
+    case 'ptab': S.ptab = d.v; render(); break;
+    case 'more': S.f.n += 24; render(); break;
+    case 'allphotos': if (S.carPhotos.length) openModal({ t: 'photos' }); break;
+    case 'share': {
+      const u = location.href;
+      try { if (navigator.share) await navigator.share({ title: document.title, url: u }); else { await navigator.clipboard.writeText(u); toast(L('Link copied.', 'Link kopiert.')); } }
+      catch (err) { if (err && err.name !== 'AbortError') toast(L('Copy the link from the address bar.', 'Kopiere den Link aus der Adresszeile.')); }
+      break;
+    }
+    case 'tocomments': e.preventDefault(); { const c = $('#comments'); if (c) c.scrollIntoView(); } break;
+    case 'modelf': { const mm = S.models.find(x => x.id === d.v); S.f = { q: '', brand: mm ? mm.brand : '', model: d.v, color: '', sort: S.f.sort, n: 24 }; go('cars'); break; }
     case 'like': {
       if (needLogin()) break;
       const id = +d.id, on = !S.likes.has(id); await api.setLike(S.me.id, id, on);
@@ -555,10 +644,10 @@ async function act(a, d, e, el) {
     }
     case 'reqmodel': openModal({ t: 'model' }); break;
     case 'editprofile': openModal({ t: 'profile' }); break;
-    case 'sort': S.f.sort = d.v; render(); break;
-    case 'brandf': S.f.brand = d.v; S.f.model = ''; await render(); $('#reg').scrollIntoView(); break;
+    case 'sort': S.f.sort = d.v; S.f.n = 24; render(); break;
+    case 'brandf': S.f = { q: '', brand: d.v, model: '', color: '', sort: S.f.sort, n: 24 }; go('cars'); break;
     case 'colorf': S.f.color = S.f.color === d.v ? '' : d.v; render(); break;
-    case 'clear': S.f = { q: '', brand: '', model: '', color: '', sort: S.f.sort }; render(); break;
+    case 'clear': S.f = { q: '', brand: '', model: '', color: '', sort: S.f.sort, n: 24 }; render(); break;
     case 'follow': {
       if (needLogin()) break;
       const on = !S.following.has(d.id); await api.setFollow(S.me.id, d.id, on);
@@ -598,13 +687,14 @@ document.addEventListener('click', e => {
 });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') { if (S.modal) closeModal(); else if (S.notifOpen) { S.notifOpen = false; render(); } } });
 document.addEventListener('input', e => {
-  if (e.target.id === 'q') { S.f.q = e.target.value; const g = $('#gridwrap'); if (g) { g.innerHTML = gridHTML(); $('#count').textContent = countText(); } }
+  if (e.target.id === 'q' && S.route === 'cars') { S.f.q = e.target.value; S.f.n = 24; const g = $('#gridwrap'); if (g) { g.innerHTML = gridHTML(); $('#count').textContent = countText(); } }
 });
 document.addEventListener('change', e => {
   const t = e.target;
   const run = p => p.catch(err => { console.error(err); toast(errMsg(err)); });
-  if (t.id === 'fb') { S.f.brand = t.value; S.f.model = ''; render(); }
-  else if (t.id === 'fm') { S.f.model = t.value; render(); }
+  if (t.id === 'fb') { S.f.brand = t.value; S.f.model = ''; S.f.n = 24; render(); }
+  else if (t.id === 'fm') { S.f.model = t.value; S.f.n = 24; render(); }
+  else if (t.id === 'fc') { S.f.color = t.value; S.f.n = 24; render(); }
   else if (t.name === 'kind') { S.up.kind = t.value; const a = $('#archkind'); if (a) a.hidden = t.value !== 'archive'; }
   else if (t.id === 'um') { const pk = $('#paintpick'); if (pk) pk.innerHTML = paintPicker(t.value, '', ''); }
   else if (t.name === 'paint') { const w = $('#famwrap'); if (w) w.hidden = t.value !== ''; }
@@ -639,7 +729,8 @@ async function submit(f) {
       } else { await api.signIn(email, pw); S.modal = null; }
       break;
     }
-    case 'search': { const r = $('#reg'); if (r) r.scrollIntoView(); break; }
+    case 'search': { S.f = { q: String(v.get('q') || ''), brand: '', model: '', color: '', sort: S.f.sort, n: 24 }; go('cars'); break; }
+    case 'filters': break;
     case 'comment': {
       const body = String(v.get('text') || '').trim(); if (!body) return;
       await api.postComment(+S.arg, S.me.id, body);
