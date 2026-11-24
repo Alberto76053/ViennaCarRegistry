@@ -94,18 +94,19 @@ export async function listSpots(kind) {
 export async function getSpot(id) {
   const s = ok(await sb.from('spots').select('*').eq('id', id).maybeSingle());
   if (!s) return null;
-  const [photos, det, st, cm] = await Promise.all([
+  const [photos, det, st, cm, mk] = await Promise.all([
     sb.from('spot_photos').select('path,position').eq('spot_id', id).order('position'),
     sb.from('spot_details').select('*').eq('spot_id', id).maybeSingle(),
     sb.from('spot_stats').select('*').eq('spot_id', id).maybeSingle(),
-    sb.from('comments').select('*').eq('spot_id', id).order('created_at')
+    sb.from('comments').select('*').eq('spot_id', id).order('created_at'),
+    sb.from('spot_marks').select('user_id,district,spotted_on').eq('spot_id', id).order('spotted_on', { ascending: false })
   ]);
-  const comments = ok(cm);
-  const authors = await profilesByIds([s.user_id, ...comments.map(c => c.user_id)]);
+  const comments = ok(cm), marks = ok(mk);
+  const authors = await profilesByIds([s.user_id, ...comments.map(c => c.user_id), ...marks.map(m => m.user_id)]);
   const stats = ok(st) || {};
   return {
     spot: s, photos: ok(photos).map(p => photoUrl(p.path)), details: ok(det),
-    likes: stats.likes || 0, commentCount: comments.length, comments, authors
+    likes: stats.likes || 0, commentCount: comments.length, comments, marks, authors
   };
 }
 
@@ -145,6 +146,7 @@ export async function postComment(spotId, uid, body) {
 }
 export async function sendReport(r) { ok(await sb.from('reports').insert(r)); }
 export async function sendEdit(e) { ok(await sb.from('spot_edits').insert(e)); }
+export async function markSpotted(uid, spotId, district, spottedOn) { ok(await sb.from('spot_marks').insert({ spot_id: spotId, user_id: uid, district, spotted_on: spottedOn })); }
 export async function sendModelRequest(uid, text) { ok(await sb.from('model_requests').insert({ user_id: uid, text })); }
 export async function sendApplication(uid, why, knowledge) { ok(await sb.from('admin_applications').insert({ user_id: uid, why, knowledge })); }
 
@@ -181,7 +183,7 @@ export async function uploadSpot(uid, v, onProgress) {
     }
     ok(await sb.from('spot_photos').insert(rows));
   } catch (e) {
-    await sb.from('spots').delete().eq('id', spot.id); // halb fertigen Spot wieder entfernen
+    await sb.from('spots').delete().eq('id', spot.id); // halb fertiges Auto wieder entfernen
     throw e;
   }
   return spot.id;

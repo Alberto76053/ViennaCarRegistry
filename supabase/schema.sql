@@ -87,6 +87,19 @@ create table public.spot_photos (
 );
 create index spot_photos_spot_idx on public.spot_photos (spot_id, position);
 
+-- Sichtungen: Mitglieder markieren ein hochgeladenes Auto als "gespottet".
+-- Wer ein Auto gespottet hat, darf Änderungen vorschlagen (siehe spot_edits).
+create table public.spot_marks (
+  id         bigint generated always as identity primary key,
+  spot_id    bigint not null references public.spots(id) on delete cascade,
+  user_id    uuid   not null references public.profiles(id) on delete cascade,
+  district   int    not null check (district between 1 and 23),
+  spotted_on date   not null default current_date,
+  created_at timestamptz not null default now(),
+  unique (spot_id, user_id, spotted_on)
+);
+create index spot_marks_spot_idx on public.spot_marks (spot_id, spotted_on desc);
+
 create table public.likes (
   user_id uuid   not null references public.profiles(id) on delete cascade,
   spot_id bigint not null references public.spots(id) on delete cascade,
@@ -290,8 +303,8 @@ begin
   end loop;
   insert into public.profiles (id, username) values (new.id, uname);
   insert into public.user_status (user_id) values (new.id);
-  perform public.notify(new.id, 'Welcome! Add your first spot to start your Dream Garage.',
-                                'Willkommen! Lade deinen ersten Spot hoch, um deine Dream Garage zu füllen.');
+  perform public.notify(new.id, 'Welcome! Upload your first car to start your Dream Garage.',
+                                'Willkommen! Lade dein erstes Auto hoch, um deine Dream Garage zu füllen.');
   return new;
 end $$;
 
@@ -349,9 +362,11 @@ declare mname text; pro boolean;
 begin
   select brand || ' ' || name into mname from public.models where id = new.model_id;
   select is_pro into pro from public.profiles where id = new.user_id;
+  -- wer ein Auto hochlädt, hat es auch gespottet
+  insert into public.spot_marks (spot_id, user_id, district) values (new.id, new.user_id, new.district);
   perform public.notify(new.user_id,
-    format('Your spot (%s) is waiting for review.%s', mname, case when pro then ' Pro: reviewed first.' else '' end),
-    format('Dein Spot (%s) wartet auf Freigabe.%s',   mname, case when pro then ' Pro: wird zuerst geprüft.' else '' end));
+    format('Your car (%s) is waiting for review.%s', mname, case when pro then ' Pro: reviewed first.' else '' end),
+    format('Dein Auto (%s) wartet auf Freigabe.%s',  mname, case when pro then ' Pro: wird zuerst geprüft.' else '' end));
   return new;
 end $$;
 
@@ -377,11 +392,11 @@ begin
   if new.status is distinct from old.status and new.status in ('approved','rejected') then
     select brand || ' ' || name into mname from public.models where id = new.model_id;
     if new.status = 'approved' then
-      perform public.notify(new.user_id, format('Your spot (%s) was approved.', mname),
-                                         format('Dein Spot (%s) wurde freigegeben.', mname));
+      perform public.notify(new.user_id, format('Your car (%s) was approved.', mname),
+                                         format('Dein Auto (%s) wurde freigegeben.', mname));
     else
-      perform public.notify(new.user_id, format('Your spot (%s) was not accepted.', mname),
-                                         format('Dein Spot (%s) wurde nicht angenommen.', mname));
+      perform public.notify(new.user_id, format('Your car (%s) was not accepted.', mname),
+                                         format('Dein Auto (%s) wurde nicht angenommen.', mname));
     end if;
   end if;
   return new;
@@ -389,6 +404,29 @@ end $$;
 
 create trigger spots_after_update after update on public.spots
   for each row execute function public.spots_after_update();
+
+-- Neue Markierung: jüngste Sichtung bestimmt Bezirk und Datum des Autos; der Uploader wird informiert
+create or replace function public.marks_after_insert() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare s record; mname text; uname text;
+begin
+  select * into s from public.spots where id = new.spot_id;
+  if not exists (select 1 from public.spot_marks m
+                  where m.spot_id = new.spot_id and m.id <> new.id and m.spotted_on > new.spotted_on) then
+    update public.spots        set district   = new.district   where id = new.spot_id;
+    update public.spot_details set spotted_on = new.spotted_on where spot_id = new.spot_id;
+  end if;
+  if new.user_id <> s.user_id then
+    select brand || ' ' || name into mname from public.models   where id = s.model_id;
+    select username            into uname from public.profiles where id = new.user_id;
+    perform public.notify(s.user_id, format('%s spotted your %s.', uname, mname),
+                                     format('%s hat dein Auto (%s) gespottet.', uname, mname));
+  end if;
+  return new;
+end $$;
+
+create trigger marks_after_insert after insert on public.spot_marks
+  for each row execute function public.marks_after_insert();
 
 -- Dream Garage: nicht mehr Plätze als freigeschaltet
 create or replace function public.garage_guard() returns trigger
@@ -562,6 +600,7 @@ alter table public.blocks             enable row level security;
 alter table public.comments           enable row level security;
 alter table public.reports            enable row level security;
 alter table public.spot_edits         enable row level security;
+alter table public.spot_marks         enable row level security;
 alter table public.model_requests     enable row level security;
 alter table public.admin_applications enable row level security;
 alter table public.events             enable row level security;
@@ -645,9 +684,19 @@ create policy reports_insert on public.reports for insert to authenticated
   with check (reporter_id = auth.uid() and exists (select 1 from public.spots s where s.id = spot_id));
 create policy reports_admin on public.reports for select to authenticated using (public.is_admin());
 
--- spot_edits: nur für den eigenen Spot
+-- spot_marks: Mitglieder sehen die Sichtungen sichtbarer Autos und markieren freigegebene Autos
+create policy marks_read on public.spot_marks for select to authenticated
+  using (exists (select 1 from public.spots s where s.id = spot_id));
+create policy marks_insert on public.spot_marks for insert to authenticated
+  with check (user_id = auth.uid() and not public.is_banned()
+    and spotted_on <= current_date + 1 and spotted_on >= current_date - 30
+    and exists (select 1 from public.spots s where s.id = spot_id and s.status = 'approved'));
+
+-- spot_edits: Änderungswünsche dürfen der Uploader und alle, die das Auto gespottet haben
 create policy edits_insert on public.spot_edits for insert to authenticated
-  with check (user_id = auth.uid() and exists (select 1 from public.spots s where s.id = spot_id and s.user_id = auth.uid()));
+  with check (user_id = auth.uid() and not public.is_banned() and (
+       exists (select 1 from public.spots s where s.id = spot_id and s.user_id = auth.uid())
+    or exists (select 1 from public.spot_marks m where m.spot_id = spot_edits.spot_id and m.user_id = auth.uid())));
 create policy edits_read on public.spot_edits for select to authenticated
   using (user_id = auth.uid() or public.is_admin());
 

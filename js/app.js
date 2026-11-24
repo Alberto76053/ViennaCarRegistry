@@ -1,7 +1,7 @@
 // Vienna Car Registry – Oberfläche
-import * as api from './api.js?v=3';
+import * as api from './api.js?v=4';
 import { OAUTH_PROVIDERS } from './config.js';
-import { COLORS, BEZ, distLabel, esc } from './art.js?v=3';
+import { COLORS, BEZ, distLabel, esc } from './art.js?v=4';
 
 /* ---------- Helfer ---------- */
 const $ = (s, r) => (r || document).querySelector(s);
@@ -116,7 +116,7 @@ function header() {
   const unread = S.notes.filter(n => !n.read).length;
   const lock = `<svg viewBox="0 0 24 24" aria-hidden="true" style="width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2">${IC.lock}</svg>`;
   const lk = (n, cls) => `<a href="#${n[0]}"${cur === n[0] ? ' aria-current="page"' : ''}${cls ? ` class="${cls}"` : ''}>${n[1]}${n[0] === 'archive' && !isPro() ? lock : ''}</a>`;
-  const links = nav.map(n => lk(n)).join('') + `<a class="add" href="#upload">${L('Add a spot', 'Spot hinzufügen')}</a>`;
+  const links = nav.map(n => lk(n)).join('') + `<a class="add" href="#upload">${L('Upload a car', 'Auto hochladen')}</a>`;
   const langBtns = `<span class="lang" role="group" aria-label="Language"><button data-act="lang" data-v="en" aria-pressed="${S.lang === 'en'}">EN</button><button data-act="lang" data-v="de" aria-pressed="${S.lang === 'de'}">DE</button></span>`;
   const themeBtn = `<button class="ibtn" data-act="theme" aria-label="${L('Switch light/dark mode', 'Hell/Dunkel umschalten')}">${ic(S.theme === 'dark' ? 'sun' : 'moon')}</button>`;
   return `<a class="skip" href="#home" data-act="skip">${L('Skip to content', 'Zum Inhalt springen')}</a>
@@ -132,7 +132,7 @@ ${S.me ? `<button class="ibtn" data-act="bell" aria-label="${L('Notifications', 
 <a href="#profile-${esc(S.me.username)}" aria-label="${L('My profile', 'Mein Profil')}">${av(S.me, 32)}</a>`
     : `<button class="ibtn" data-act="login" aria-label="${L('Sign in', 'Anmelden')}">${ic('user')}</button>`}
 </div></div>
-<nav class="mnav" aria-label="Menu" ${S.menu ? '' : 'hidden'}>${nav.map(n => lk(n)).join('')}<a href="#upload">${L('Add a spot', 'Spot hinzufügen')}</a><a href="#pro">Pro</a>
+<nav class="mnav" aria-label="Menu" ${S.menu ? '' : 'hidden'}>${nav.map(n => lk(n)).join('')}<a href="#upload">${L('Upload a car', 'Auto hochladen')}</a><a href="#pro">Pro</a>
 <div class="row" style="padding:6px 4px">${langBtns}${themeBtn}</div></nav>
 ${S.notifOpen && S.me ? notifPanel() : ''}</header>`;
 }
@@ -144,7 +144,7 @@ function footer() {
 <footer class="foot"><div class="fg"><div class="fb"><a class="brand" href="#home"><span class="plate"><i></i><b>VCR</b><i></i></span><span>Vienna Car Registry</span></a>
 <p class="tag2">${L('Spotted in Vienna. Checked by admins.', 'In Wien gespottet. Von Admins geprüft.')}</p></div>
 <div class="cols2"><div class="col"><p>${L('Resources', 'Ressourcen')}</p><a href="#cars">${L('Cars', 'Autos')}</a><a href="#archive">${L('Archive', 'Archiv')}</a><a href="#events">Events</a><a href="#ranking">Ranking</a></div>
-<div class="col"><p>${L('Community', 'Community')}</p><a href="#upload">${L('Add a spot', 'Spot hinzufügen')}</a><a href="#pro">Pro</a>${S.me && !isAdmin() ? `<a href="#apply">${L('Become an admin', 'Admin werden')}</a>` : ''}${S.me ? `<button data-act="logout">${L('Sign out', 'Abmelden')}</button>` : `<button data-act="login">${L('Sign in', 'Anmelden')}</button>`}</div></div></div>
+<div class="col"><p>${L('Community', 'Community')}</p><a href="#upload">${L('Upload a car', 'Auto hochladen')}</a><a href="#pro">Pro</a>${S.me && !isAdmin() ? `<a href="#apply">${L('Become an admin', 'Admin werden')}</a>` : ''}${S.me ? `<button data-act="logout">${L('Sign out', 'Abmelden')}</button>` : `<button data-act="login">${L('Sign in', 'Anmelden')}</button>`}</div></div></div>
 <p class="copy">© ${new Date().getFullYear()} Vienna Car Registry. ${L('All rights reserved.', 'Alle Rechte vorbehalten.')}</p></footer>`;
 }
 const head = (t, sub) => `<section class="wrap ph0"><h1>${t}</h1>${sub ? `<p>${sub}</p>` : ''}</section>`;
@@ -174,7 +174,7 @@ function filtered() {
 }
 function gridHTML() {
   const a = filtered();
-  if (!S.list.length) return `<div class="car_list"><div class="empty"><h2>${L('No spots yet', 'Noch keine Spots')}</h2><p>${L('Be the first to add a car you saw in Vienna.', 'Lade als Erste oder Erster ein Auto hoch, das du in Wien gesehen hast.')}</p><a class="btn" href="#upload">${L('Add a spot', 'Spot hinzufügen')}</a></div></div>`;
+  if (!S.list.length) return `<div class="car_list"><div class="empty"><h2>${L('No cars yet', 'Noch keine Autos')}</h2><p>${L('Be the first to upload a car you saw in Vienna.', 'Lade als Erste oder Erster ein Auto hoch, das du in Wien gesehen hast.')}</p><a class="btn" href="#upload">${L('Upload a car', 'Auto hochladen')}</a></div></div>`;
   if (!a.length) return `<div class="car_list"><div class="empty"><h2>${L('No cars match these filters', 'Keine Autos für diese Filter')}</h2><p>${L('Try another colour or model, or clear the filters.', 'Probiere eine andere Farbe oder ein anderes Modell oder setze die Filter zurück.')}</p><button class="btn" data-act="clear">${L('Clear filters', 'Filter zurücksetzen')}</button></div></div>`;
   const shown = a.slice(0, S.f.n);
   return `<div class="car_list">${shown.map(tile).join('')}</div>${a.length > shown.length ? `<div class="more"><button class="btn" data-act="more">${L('See more', 'Mehr anzeigen')}</button></div>` : ''}`;
@@ -200,7 +200,7 @@ async function pageHome() {
     const ss = vis.filter(s => s.model_id === m.id).sort((x, y) => (y.likes - x.likes) || (y.id - x.id)), sp = S.specs[m.id] || {};
     const ph = ss.find(x => (x.photos || []).length);
     const facts = [sp.engine, sp.power, sp.year].filter(Boolean).join(' · ');
-    return `<button class="modc" data-act="modelf" data-v="${esc(m.id)}"><div class="image">${ph ? photoHTML(ph, 0) : `<div class="nophoto"><span>${esc(m.brand)}</span></div>`}</div><div class="t"><b>${esc(m.brand)} ${esc(m.name)}</b><p>${esc(facts) || (ss.length ? `${ss.length} ${ss.length === 1 ? L('spot in Vienna', 'Spot in Wien') : L('spots in Vienna', 'Spots in Wien')}` : L('No spots in Vienna yet.', 'Noch keine Spots in Wien.'))}</p></div></button>`;
+    return `<button class="modc" data-act="modelf" data-v="${esc(m.id)}"><div class="image">${ph ? photoHTML(ph, 0) : `<div class="nophoto"><span>${esc(m.brand)}</span></div>`}</div><div class="t"><b>${esc(m.brand)} ${esc(m.name)}</b><p>${esc(facts) || (ss.length ? `${ss.length} ${ss.length === 1 ? L('car in Vienna', 'Auto in Wien') : L('cars in Vienna', 'Autos in Wien')}` : L('No cars in Vienna yet.', 'Noch keine Autos in Wien.'))}</p></div></button>`;
   }).join('');
   const cat = (href, i, n, t, d) => `<a class="cat" href="#${href}"><span class="upd">${ic(i)}${n}</span><div class="in"><h3>${t}</h3><p>${d}</p><span class="go">${L('Explore category', 'Kategorie ansehen')} →</span></div></a>`;
   return `<section class="wrap hero"><p class="welcome">${L('Welcome to', 'Willkommen bei')}</p><h1>Vienna Car Registry</h1>
@@ -214,7 +214,7 @@ ${vis.length ? `<div class="more"><a class="btn" href="#cars">${L('See more', 'M
 ${up.length ? `<section class="wrap blk">${blockTitle(L('Latest Events', 'Nächste Events'))}<div class="car_list">${up.map(e => `<a class="car_item" href="#events"><div class="texto"><p class="title"><span class="t">${esc(e.title)}</span></p><div class="icons_row">${ico('cal', `${+e.starts_on.slice(8, 10)} ${mo(e.starts_on)}`, L('Date', 'Datum'))}${e.place || e.district ? ico('pin', esc(e.place || distLabel(e.district)), L('Place', 'Ort')) : ''}</div></div></a>`).join('')}</div><div class="more"><a class="btn" href="#events">${L('See more', 'Mehr anzeigen')}</a></div></section>` : ''}
 ${brands.length ? `<section class="wrap blk">${blockTitle(L('Explore - Make', 'Entdecken - Marken'))}<div class="brands">${brandCards}</div></section>` : ''}
 ${S.models.length ? `<section class="wrap blk">${blockTitle(L('Explore - Models', 'Entdecken - Modelle'))}<div class="models">${modCards}</div><div class="more"><a class="btn" href="#cars">${L('See more', 'Mehr anzeigen')}</a></div></section>` : ''}
-<section class="wrap blk"><p class="tagline">${L('Every spot is checked by an admin before it goes live.', 'Jeder Spot wird von einem Admin geprüft, bevor er online geht.')}</p>
+<section class="wrap blk"><p class="tagline">${L('Every car is checked by an admin before it goes live.', 'Jedes Auto wird von einem Admin geprüft, bevor es online geht.')}</p>
 <div class="cats">${cat('cars', 'car', vis.length, L('Cars', 'Autos'), L('Browse every exclusive car spotted in Vienna.', 'Alle exklusiven Autos ansehen, die in Wien gespottet wurden.'))}${cat('archive', 'lock', '', L('Archive', 'Archiv'), L('Ex-Viennese cars, visitors and event cars. Part of Pro.', 'Ex-Wiener Autos, Besucher und Event-Autos. Teil von Pro.'))}${cat('events', 'cal', up.length, 'Events', L('Meets and shows in and around Vienna.', 'Treffen und Shows in und um Wien.'))}${cat('ranking', 'star', '', 'Ranking', L('The spotters with the most approved uploads.', 'Die Spotter mit den meisten freigegebenen Uploads.'))}</div></section>`;
 }
 
@@ -255,6 +255,9 @@ async function pageCar(id) {
   const n = d.photos.length, pi = Math.min(S.pi, Math.max(n - 1, 0));
   const owner = d.authors[s.user_id];
   const mine = S.me && S.me.id === s.user_id;
+  const marks = d.marks || [];
+  const myMark = !!(S.me && marks.some(x => x.user_id === S.me.id));
+  const canEdit = !!(mine || (myMark && s.status === 'approved'));
   const sp = S.specs[s.model_id] || {};
   // Galerie: ein großes Bild links, bis zu vier kleine rechts
   const others = d.photos.map((u, i) => i).filter(i => i !== pi).slice(0, 4);
@@ -279,8 +282,8 @@ async function pageCar(id) {
   const liked = S.likes.has(s.id), fav = S.favs.has(s.id);
   const cs = d.comments.filter(c => !S.blocked.has(c.user_id));
   let pend = '';
-  if (s.status === 'pending') pend = `<div class="banner" style="margin-top:14px">${isAdmin() && !mine ? L('This spot waits for review.', 'Dieser Spot wartet auf Prüfung.') : L('Only you can see this spot until an admin approves it.', 'Nur du siehst diesen Spot, bis ein Admin ihn freigibt.')}${isAdmin() ? `<div class="row" style="margin-top:10px"><button class="btn sm" data-act="approve" data-id="${s.id}">${L('Approve', 'Freigeben')}</button><button class="btn red sm" data-act="reject" data-id="${s.id}">${L('Reject', 'Ablehnen')}</button></div>` : ''}</div>`;
-  if (s.status === 'rejected') pend = `<div class="banner bad" style="margin-top:14px">${L('This spot was not accepted.', 'Dieser Spot wurde nicht angenommen.')}</div>`;
+  if (s.status === 'pending') pend = `<div class="banner" style="margin-top:14px">${isAdmin() && !mine ? L('This car waits for review.', 'Dieses Auto wartet auf Prüfung.') : L('Only you can see this car until an admin approves it.', 'Nur du siehst dieses Auto, bis ein Admin es freigibt.')}${isAdmin() ? `<div class="row" style="margin-top:10px"><button class="btn sm" data-act="approve" data-id="${s.id}">${L('Approve', 'Freigeben')}</button><button class="btn red sm" data-act="reject" data-id="${s.id}">${L('Reject', 'Ablehnen')}</button></div>` : ''}</div>`;
+  if (s.status === 'rejected') pend = `<div class="banner bad" style="margin-top:14px">${L('This car was not accepted.', 'Dieses Auto wurde nicht angenommen.')}</div>`;
   const commentForm = banned()
     ? `<div class="banner bad">${L('Your account is suspended after three warnings. You can read, but not comment.', 'Dein Konto ist nach drei Verwarnungen gesperrt. Du kannst lesen, aber nicht kommentieren.')}</div>`
     : s.status !== 'approved' ? '' : `<form data-form="comment" class="stack" style="margin:12px 0 6px"><label class="sr" for="ct">${L('Your comment', 'Dein Kommentar')}</label><textarea id="ct" name="text" rows="2" maxlength="400" placeholder="${L('Add a comment', 'Kommentar schreiben')}"></textarea><div class="row"><button class="btn sm" type="submit">${L('Post comment', 'Kommentar senden')}</button><span class="hint" style="margin:0">${L('Bad language is filtered and earns a warning.', 'Schimpfwörter werden gefiltert und führen zu einer Verwarnung.')}</span></div></form>`;
@@ -288,10 +291,14 @@ async function pageCar(id) {
     ? `<h2>${L('Comments', 'Kommentare')} (${cs.length})</h2>${commentForm}
 ${cs.map(c => `<div class="cm">${av(d.authors[c.user_id], 36)}<div><div class="meta">${uLink(d.authors[c.user_id])} · ${fd(c.created_at)}${c.filtered ? ` · <span class="tag warn">${L('Filtered', 'Gefiltert')}</span>` : ''}</div><p>${esc(c.body)}</p>${c.user_id !== S.me.id ? `<button class="linkb sm mute" data-act="report" data-k="comment" data-id="${s.id}" data-cid="${c.id}">${L('Report comment', 'Kommentar melden')}</button>` : ''}</div></div>`).join('')}`
     : `<h2>${L('Comments', 'Kommentare')}</h2><div class="lock">${ic('lock')}<div><p><strong>${L('Comments and full details are for members.', 'Kommentare und alle Details sind für Mitglieder.')}</strong><br>${L('Create a free account to read and write comments and see the full spec.', 'Erstelle ein kostenloses Konto, um Kommentare zu lesen und zu schreiben und alle Daten zu sehen.')}</p><button class="btn sm" data-act="login">${L('Sign in or create account', 'Anmelden oder Konto erstellen')}</button></div></div>`;
+  const spUsers = [...new Set(marks.map(x => x.user_id))].map(id => d.authors[id]).filter(Boolean).filter(u => !S.blocked.has(u.id));
+  const spotters = spUsers.length ? spUsers.slice(0, 5).map(uLink).join(', ') + (spUsers.length > 5 ? ` ${L(`and ${spUsers.length - 5} more`, `und ${spUsers.length - 5} weitere`)}` : '') : '—';
+  const markHint = S.me && s.status === 'approved' && !canEdit ? `<p class="hint" style="margin-top:14px">${L('Seen this car? Mark it as spotted to suggest changes.', 'Dieses Auto gesehen? Markiere es als gespottet, um Änderungen vorzuschlagen.')}</p>` : '';
   const info = `<div class="card"><h2>${L('Information', 'Information')}</h2><dl class="infolist">
 <div><dt>${L('Listed in', 'Eingetragen in')}</dt><dd>${s.kind === 'archive' ? `${L('Archive', 'Archiv')}: ${archL(s.arch_kind)}` : L('Registry', 'Register')}</dd></div>
-<div><dt>${L('Spotted', 'Gesehen am')}</dt><dd>${mem(fd((d.details && d.details.spotted_on) || s.created_at))}</dd></div>
-<div><dt>${L('Spotted by', 'Gespottet von')}</dt><dd>${mem(uLink(owner))}</dd></div></dl></div>`;
+<div><dt>${L('Last spotted', 'Zuletzt gesehen')}</dt><dd>${mem(fd(marks.length ? marks[0].spotted_on : ((d.details && d.details.spotted_on) || s.created_at)))}</dd></div>
+<div><dt>${L('Uploaded by', 'Hochgeladen von')}</dt><dd>${mem(uLink(owner))}</dd></div>
+<div><dt>${L('Spotted by', 'Gespottet von')}</dt><dd>${mem(spotters)}</dd></div></dl>${markHint}</div>`;
   return `<div class="wrap"><p class="crumb"><a href="${s.kind === 'archive' ? '#archive' : '#cars'}">← ${s.kind === 'archive' ? L('Archive', 'Archiv') : L('Cars', 'Autos')}</a></p>
 ${gallery}
 <div class="carh"><div class="row pl">${plate(s, true)}${s.status === 'pending' ? `<span class="tag warn">${L('Waiting for approval', 'Wartet auf Freigabe')}</span>` : ''}</div>
@@ -303,8 +310,9 @@ ${gallery}
 <button data-act="fav" data-id="${s.id}" aria-pressed="${fav}">${ic('star')} ${fav ? L('Saved', 'Gespeichert') : L('Save', 'Speichern')}</button>
 <button data-act="allphotos">${ic('cam')} ${L('All Photos', 'Alle Fotos')} (${n})</button>
 <button data-act="share">${ic('share')} ${L('Share', 'Teilen')}</button>
+${s.status === 'approved' ? `<button data-act="spotted" data-id="${s.id}" aria-pressed="${myMark}">${ic('pin')} ${myMark ? L('Spotted', 'Gespottet') : L('Mark as spotted', 'Als gespottet markieren')}</button>` : ''}
 <span class="sp"></span>
-${mine ? `<button data-act="edit" data-id="${s.id}">${ic('pen')} ${L('Edit', 'Bearbeiten')}</button>` : ''}
+${canEdit ? `<button data-act="edit" data-id="${s.id}">${ic('pen')} ${L('Edit', 'Bearbeiten')}</button>` : ''}
 <button data-act="report" data-k="spot" data-id="${s.id}">${ic('flag')} ${L('Report', 'Melden')}</button></div>
 <div class="cols"><div>${info}<div id="comments" class="card">${comments}</div></div>${panel}</div></div>`;
 }
@@ -333,7 +341,7 @@ function pagePro() {
     [L('No ads', 'Keine Werbung'), L('The registry has no ads by default. If a sponsor ever pays for one, Pro members won’t see it.', 'Das Register hat standardmäßig keine Werbung. Falls ein Sponsor jemals dafür zahlt, sehen Pro-Mitglieder sie nicht.')],
     [L('Plate blurring', 'Kennzeichen unkenntlich machen'), L('Under consideration: automatic blurring of plates in your photos.', 'In Überlegung: automatisches Unkenntlichmachen von Kennzeichen auf deinen Fotos.')]
   ];
-  return head('Vienna Car Registry Pro', L('Support the registry and get a few extras. Photos per spot stay unlimited for everyone.', 'Unterstütze das Register und bekomm ein paar Extras. Fotos pro Spot bleiben für alle unbegrenzt.'))
+  return head('Vienna Car Registry Pro', L('Support the registry and get a few extras. Photos per car stay unlimited for everyone.', 'Unterstütze das Register und bekomm ein paar Extras. Fotos pro Auto bleiben für alle unbegrenzt.'))
     + `<div class="wrap sec"><div style="max-width:860px">${perks.map(p => `<div class="perk"><h3>${p[0]}</h3><p>${p[1]}</p></div>`).join('')}</div>
 <div class="row" style="margin-top:26px">${isPro() ? `<span class="pro" style="font-size:15px;padding:6px 12px">${L('You are Pro', 'Du bist Pro')}</span>` : S.me ? `<span class="tag">${L('Not Pro yet', 'Noch nicht Pro')}</span>` : `<button class="btn" data-act="login">${L('Sign in', 'Anmelden')}</button>`}</div>
 <p class="hint" style="margin-top:12px">${L('Paid subscriptions are not switched on yet. Until then the team grants Pro by hand. Price to be announced.', 'Bezahlte Abos sind noch nicht freigeschaltet. Bis dahin vergibt das Team Pro von Hand. Preis wird noch bekannt gegeben.')}</p></div>`;
@@ -373,8 +381,8 @@ async function pageProfile(name) {
 <h2 style="margin-top:12px">Dream Garage</h2>
 <p class="mute sm" style="margin:6px 0 14px">${L(`${slots} slots: 3 to start, one more for every 5 approved uploads. Everyone can see it.`, `${slots} Plätze: 3 zum Start, einer mehr pro 5 freigegebenen Uploads. Für alle sichtbar.`)}</p>
 <div class="garage">${g}</div>${slots > 12 ? `<p class="hint">${L(`+${slots - 12} more slots unlocked`, `+${slots - 12} weitere Plätze freigeschaltet`)}</p>` : ''}
-<h2 style="margin-top:36px">${L('Spots', 'Spots')}</h2>
-<div class="car_list">${spots.length ? spots.map(s => `<div>${tile(s)}${s.status === 'pending' ? `<span class="tag warn" style="margin-top:6px">${L('Waiting for approval', 'Wartet auf Freigabe')}</span>` : s.status === 'rejected' ? `<span class="tag" style="margin-top:6px">${L('Not accepted', 'Nicht angenommen')}</span>` : ''}</div>`).join('') : `<p class="mute">${L('No spots yet.', 'Noch keine Spots.')}</p>`}</div>${favs}</div>`;
+<h2 style="margin-top:36px">${L('Uploads', 'Uploads')}</h2>
+<div class="car_list">${spots.length ? spots.map(s => `<div>${tile(s)}${s.status === 'pending' ? `<span class="tag warn" style="margin-top:6px">${L('Waiting for approval', 'Wartet auf Freigabe')}</span>` : s.status === 'rejected' ? `<span class="tag" style="margin-top:6px">${L('Not accepted', 'Nicht angenommen')}</span>` : ''}</div>`).join('') : `<p class="mute">${L('No uploads yet.', 'Noch keine Uploads.')}</p>`}</div>${favs}</div>`;
 }
 
 async function pageMessages() {
@@ -414,18 +422,18 @@ const distOpts = sel => BEZ.map((b, i) => `<option value="${i + 1}"${sel === i +
 const prevHTML = () => S.up.files.map((f, i) => `<div><img src="${f.url}" alt="${esc(f.file.name)}"><button type="button" data-act="rmphoto" data-i="${i}" aria-label="${L('Remove photo', 'Foto entfernen')}">×</button></div>`).join('');
 
 function pageUpload() {
-  if (!S.me) return gate(L('Add a spot', 'Spot hinzufügen'), L('Create a free account first. You need to be 12 or older.', 'Erstelle zuerst ein kostenloses Konto. Du musst mindestens 12 Jahre alt sein.'));
+  if (!S.me) return gate(L('Upload a car', 'Auto hochladen'), L('Create a free account first. You need to be 12 or older.', 'Erstelle zuerst ein kostenloses Konto. Du musst mindestens 12 Jahre alt sein.'));
   if (banned()) return head(L('Uploads paused', 'Uploads pausiert'), L('Your account is suspended after three warnings.', 'Dein Konto ist nach drei Verwarnungen gesperrt.'));
   const k = S.up.kind;
-  return head(L('Add a spot', 'Spot hinzufügen'), L('Every upload is reviewed by an admin before it appears. Pro members are reviewed first.', 'Jeder Upload wird von einem Admin geprüft, bevor er erscheint. Pro-Mitglieder werden zuerst geprüft.'))
+  return head(L('Upload a car', 'Auto hochladen'), L('Every upload is reviewed by an admin before it appears. Pro members are reviewed first.', 'Jeder Upload wird von einem Admin geprüft, bevor er erscheint. Pro-Mitglieder werden zuerst geprüft.'))
     + `<div class="wrap"><form class="form" data-form="upload" novalidate>
-<fieldset><legend>${L('What are you adding?', 'Was möchtest du hinzufügen?')}</legend><div class="choice"><label><input type="radio" name="kind" value="registry"${k === 'registry' ? ' checked' : ''}><span>${L('A car seen in Vienna', 'Ein Auto in Wien gesehen')}</span></label><label><input type="radio" name="kind" value="archive"${k === 'archive' ? ' checked' : ''}><span>${L('Archive request', 'Archiv-Anfrage')}</span></label></div>
+<fieldset><legend>${L('What are you uploading?', 'Was lädst du hoch?')}</legend><div class="choice"><label><input type="radio" name="kind" value="registry"${k === 'registry' ? ' checked' : ''}><span>${L('A car seen in Vienna', 'Ein Auto in Wien gesehen')}</span></label><label><input type="radio" name="kind" value="archive"${k === 'archive' ? ' checked' : ''}><span>${L('Archive request', 'Archiv-Anfrage')}</span></label></div>
 <p class="hint">${L('Archive: cars that were sold abroad, visited Vienna or showed up at an event.', 'Archiv: Autos, die ins Ausland verkauft wurden, Wien besucht haben oder bei einem Event waren.')}</p></fieldset>
 <div id="archkind" ${k === 'archive' ? '' : 'hidden'}><label for="ak">${L('Archive type', 'Archiv-Art')}</label><select id="ak" name="arch"><option value="ex">${archL('ex')}</option><option value="visit">${archL('visit')}</option><option value="event">${archL('event')}</option></select></div>
 <div><label for="um">${L('Model', 'Modell')}</label><select id="um" name="model" required><option value="">${L('Choose a model', 'Modell wählen')}</option>${S.models.map(m => `<option value="${esc(m.id)}">${esc(`${m.brand} ${m.name}`)}</option>`).join('')}</select>
 <p class="hint">${L('Model missing?', 'Modell fehlt?')} <button type="button" class="linkb" data-act="reqmodel">${L('Request it', 'Anfragen')}</button></p></div>
 <div id="paintpick">${paintPicker('', '', '')}</div>
-<div><label for="ud">${L('District', 'Bezirk')}</label><select id="ud" name="district"><option value="">${L('Choose a district', 'Bezirk wählen')}</option>${distOpts(0)}</select><p class="hint">${L('Only the district is shown, never the exact spot.', 'Es wird nur der Bezirk angezeigt, nie der genaue Ort.')}</p></div>
+<div><label for="ud">${L('District', 'Bezirk')}</label><select id="ud" name="district"><option value="">${L('Choose a district', 'Bezirk wählen')}</option>${distOpts(0)}</select><p class="hint">${L('Only the district is shown, never the exact location.', 'Es wird nur der Bezirk angezeigt, nie der genaue Ort.')}</p></div>
 <div><label for="up">${L('Production number (optional)', 'Produktionsnummer (optional)')}</label><input id="up" name="prod" type="text" inputmode="numeric" maxlength="4" placeholder="123"><p class="hint">${L('For example 123 of 500.', 'Zum Beispiel Nr. 123 von 500.')}</p></div>
 <div><label for="files">${L('Photos', 'Fotos')}</label><input id="files" type="file" accept="image/*" multiple><p class="hint">${L('As many as you like. More angles are better.', 'So viele du willst. Mehr Blickwinkel sind besser.')}</p><div class="prev" id="prev">${prevHTML()}</div><p class="err" id="uerr">${esc(S.errUp)}</p></div>
 <div class="row"><button class="btn" id="usend" type="submit">${L('Send for review', 'Zur Prüfung senden')}</button><span class="prog" id="uprog"></span></div></form></div>`;
@@ -434,7 +442,7 @@ function pageUpload() {
 function pageApply() {
   if (!S.me) return gate(L('Become an admin', 'Admin werden'), L('Sign in to apply.', 'Melde dich an, um dich zu bewerben.'));
   if (S.applied) return head(L('Application sent', 'Bewerbung gesendet'), L('The CEO reads every application. You’ll get a notification when there is a decision.', 'Der CEO liest jede Bewerbung. Du bekommst eine Benachrichtigung, sobald entschieden ist.'));
-  return head(L('Become an admin', 'Admin werden'), L('Admins approve spots and keep the registry accurate. Tell us why you want the role and what you know about cars.', 'Admins geben Spots frei und halten das Register korrekt. Sag uns, warum du die Rolle willst und was du über Autos weißt.'))
+  return head(L('Become an admin', 'Admin werden'), L('Admins approve cars and keep the registry accurate. Tell us why you want the role and what you know about cars.', 'Admins geben Autos frei und halten das Register korrekt. Sag uns, warum du die Rolle willst und was du über Autos weißt.'))
     + `<div class="wrap"><form class="form" data-form="apply"><div><label for="aw">${L('Why do you want to be an admin?', 'Warum möchtest du Admin werden?')}</label><textarea id="aw" name="why" rows="4" required></textarea><p class="hint">${L('At least 30 characters.', 'Mindestens 30 Zeichen.')}</p></div>
 <div><label for="ak2">${L('What do you know about cars?', 'Was weißt du über Autos?')}</label><textarea id="ak2" name="know" rows="4" required></textarea><p class="hint">${L('Models, years, special editions, anything that shows your knowledge.', 'Modelle, Baujahre, Sondereditionen, alles, was dein Wissen zeigt.')}</p></div>
 <p class="err" id="aerr"></p><div class="row"><button class="btn" type="submit">${L('Send application', 'Bewerbung senden')}</button></div></form></div>`;
@@ -474,7 +482,7 @@ function adminBody(A) {
   if (t === 'models') return A.models.length ? A.models.map(r => `<div class="qrow"><div class="qmain"><strong>${esc(r.text)}</strong><p class="mute sm">${L('Requested by', 'Angefragt von')} ${uLink(A.authors[r.user_id])}. ${L('Only exclusive cars belong in the registry.', 'Ins Register gehören nur exklusive Autos.')}</p></div><div class="qact"><button class="btn sm" data-act="modelok" data-id="${r.id}" data-t="${esc(r.text)}">${L('Add model', 'Modell aufnehmen')}</button><button class="btn red sm" data-act="modelno" data-id="${r.id}">${L('Decline', 'Ablehnen')}</button></div></div>`).join('') : noneYet();
   if (t === 'reports') return A.reports.length ? A.reports.map(r => {
     const c = r.comment_id ? A.refComments.find(x => x.id === r.comment_id) : null;
-    return `<div class="qrow"><div class="qmain"><strong>${r.comment_id ? L('Comment', 'Kommentar') : 'Spot'}: <a href="#car-${r.spot_id}">${esc(sn(r.spot_id))}</a></strong><p class="sm">${esc(REASONS[r.reason][S.lang === 'de' ? 1 : 0])}${r.note ? ': ' + esc(r.note) : ''}</p>${c ? `<p class="sm mute">“${esc(c.body)}” — ${uLink(A.authors[c.user_id])}</p>` : ''}<p class="mute sm">${L('Reported by', 'Gemeldet von')} ${uLink(A.authors[r.reporter_id])}</p></div><div class="qact"><button class="btn ghost sm" data-act="repno" data-id="${r.id}">${L('Dismiss', 'Verwerfen')}</button><button class="btn red sm" data-act="repyes" data-id="${r.id}">${r.comment_id ? L('Remove + warn', 'Entfernen + verwarnen') : L('Remove spot', 'Spot entfernen')}</button></div></div>`;
+    return `<div class="qrow"><div class="qmain"><strong>${r.comment_id ? L('Comment', 'Kommentar') : L('Car', 'Auto')}: <a href="#car-${r.spot_id}">${esc(sn(r.spot_id))}</a></strong><p class="sm">${esc(REASONS[r.reason][S.lang === 'de' ? 1 : 0])}${r.note ? ': ' + esc(r.note) : ''}</p>${c ? `<p class="sm mute">“${esc(c.body)}” — ${uLink(A.authors[c.user_id])}</p>` : ''}<p class="mute sm">${L('Reported by', 'Gemeldet von')} ${uLink(A.authors[r.reporter_id])}</p></div><div class="qact"><button class="btn ghost sm" data-act="repno" data-id="${r.id}">${L('Dismiss', 'Verwerfen')}</button><button class="btn red sm" data-act="repyes" data-id="${r.id}">${r.comment_id ? L('Remove + warn', 'Entfernen + verwarnen') : L('Remove car', 'Auto entfernen')}</button></div></div>`;
   }).join('') : noneYet();
   if (t === 'apps') return (isCeo() ? '' : `<p class="mute sm" style="padding-top:12px">${L('Only the CEO decides on applications.', 'Nur der CEO entscheidet über Bewerbungen.')}</p>`) + (A.apps.length ? A.apps.map(a => `<div class="qrow"><div class="qmain"><strong>${uLink(A.authors[a.user_id])}</strong><p class="sm"><em>${L('Why', 'Warum')}:</em> ${esc(a.why)}</p><p class="sm"><em>${L('Car knowledge', 'Autowissen')}:</em> ${esc(a.knowledge)}</p></div>${isCeo() ? `<div class="qact"><button class="btn sm" data-act="appyes" data-id="${a.id}">${L('Accept', 'Annehmen')}</button><button class="btn red sm" data-act="appno" data-id="${a.id}">${L('Decline', 'Ablehnen')}</button></div>` : ''}</div>`).join('') : noneYet());
   if (t === 'users') return A.users.map(u => {
@@ -489,7 +497,7 @@ async function pageAdmin() {
   if (!isAdmin()) return head('Admin', L('This area is for admins. Applications are open.', 'Dieser Bereich ist für Admins. Bewerbungen sind offen.')) + `<div class="wrap sec"><a class="btn" href="#apply">${L('Become an admin', 'Admin werden')}</a></div>`;
   const A = await cached('admin', async () => { const a = await api.adminData(); a.events = await api.listEvents(); return a; });
   const cnt = { spots: A.spots.filter(s => s.kind === 'registry').length, archive: A.spots.filter(s => s.kind === 'archive').length, edits: A.edits.length, models: A.models.length, reports: A.reports.length, apps: A.apps.length };
-  const tabs = [['spots', L('Spots', 'Spots')], ['edits', L('Edits', 'Änderungen')], ['archive', L('Archive requests', 'Archiv-Anfragen')], ['models', L('Model requests', 'Modell-Anfragen')], ['reports', L('Reports', 'Meldungen')], ['apps', L('Applications', 'Bewerbungen')], ['users', L('People', 'Personen')], ['paints', L('Paints', 'Lacke')], ['events', 'Events']];
+  const tabs = [['spots', L('Cars', 'Autos')], ['edits', L('Edits', 'Änderungen')], ['archive', L('Archive requests', 'Archiv-Anfragen')], ['models', L('Model requests', 'Modell-Anfragen')], ['reports', L('Reports', 'Meldungen')], ['apps', L('Applications', 'Bewerbungen')], ['users', L('People', 'Personen')], ['paints', L('Paints', 'Lacke')], ['events', 'Events']];
   return head('Admin', L('Pro members are listed first in the queue.', 'Pro-Mitglieder stehen zuerst in der Warteschlange.'))
     + `<div class="wrap sec"><div class="tabs" role="group" aria-label="Admin">${tabs.map(t => `<button data-act="atab" data-v="${t[0]}" aria-pressed="${S.adminTab === t[0]}">${t[1]}${cnt[t[0]] != null ? `<em>${cnt[t[0]]}</em>` : ''}</button>`).join('')}</div><div id="abody">${adminBody(A)}</div></div>`;
 }
@@ -512,14 +520,19 @@ ${up || OAUTH_PROVIDERS.length ? `<label class="chk"><input type="checkbox" id="
 <button class="btn" type="submit">${up ? L('Create account', 'Konto erstellen') : L('Sign in', 'Anmelden')}</button></form>`;
   }
   if (m.t === 'photos') c = `<h2 id="mt">${L('All photos', 'Alle Fotos')} (${S.carPhotos.length})</h2><div class="allph">${S.carPhotos.map((u, i) => `<button data-act="thumb" data-i="${i}" aria-label="${L('Photo', 'Foto')} ${i + 1}"><img src="${esc(u)}" alt="" loading="lazy"></button>`).join('')}</div>`;
-  if (m.t === 'report') c = `<h2 id="mt">${m.k === 'spot' ? L('Report this spot', 'Spot melden') : L('Report this comment', 'Kommentar melden')}</h2>
+  if (m.t === 'report') c = `<h2 id="mt">${m.k === 'spot' ? L('Report this car', 'Auto melden') : L('Report this comment', 'Kommentar melden')}</h2>
 <form data-form="report"><div><label for="rr">${L('Reason', 'Grund')}</label><select id="rr" name="reason">${Object.keys(REASONS).map(k => `<option value="${k}">${REASONS[k][S.lang === 'de' ? 1 : 0]}</option>`).join('')}</select></div><div><label for="rn">${L('Details (optional)', 'Details (optional)')}</label><textarea id="rn" name="note" rows="3" maxlength="300"></textarea></div><button class="btn" type="submit">${L('Send report', 'Meldung senden')}</button></form>`;
   if (m.t === 'edit') {
     const s = m.spot;
-    c = `<h2 id="mt">${L('Edit your spot', 'Spot bearbeiten')}</h2><p class="mute sm">${L('Changes go live after an admin approves them.', 'Änderungen gehen online, sobald ein Admin sie freigibt.')}</p>
+    c = `<h2 id="mt">${L('Suggest changes', 'Änderungen vorschlagen')}</h2><p class="mute sm">${L('Changes go live after an admin approves them.', 'Änderungen gehen online, sobald ein Admin sie freigibt.')}</p>
 <form data-form="edit">${paintPicker(s.model_id, s.paint || '', s.color, !s.paint)}<div><label for="ed2">${L('District', 'Bezirk')}</label><select id="ed2" name="district">${distOpts(s.district)}</select></div><div><label for="ep2">${L('Production number', 'Produktionsnummer')}</label><input id="ep2" type="text" name="prod" maxlength="4" value="${esc(m.prod || '')}"></div>
 ${s.kind === 'registry' ? `<div><label for="ear">${L('Ask to move it to the Vienna Archives', 'Aufnahme in die Vienna Archives anfragen')}</label><select id="ear" name="arch"><option value="">${L('No, keep it in the registry', 'Nein, im Register lassen')}</option><option value="ex">${archL('ex')}</option><option value="visit">${archL('visit')}</option><option value="event">${archL('event')}</option></select></div>` : ''}
 <button class="btn" type="submit">${L('Send for approval', 'Zur Freigabe senden')}</button></form>`;
+  }
+  if (m.t === 'spotted') {
+    const t0 = new Date(Date.now() - new Date().getTimezoneOffset() * 60000), day = n => new Date(t0.getTime() - n * 864e5).toISOString().slice(0, 10);
+    c = `<h2 id="mt">${L('Mark as spotted', 'Als gespottet markieren')}</h2><p class="mute sm">${L('Where and when did you see this car? Only the district is shown. Afterwards you can suggest changes to its details.', 'Wo und wann hast du dieses Auto gesehen? Es wird nur der Bezirk angezeigt. Danach kannst du Änderungen an den Daten vorschlagen.')}</p>
+<form data-form="spotted"><div><label for="sd">${L('District', 'Bezirk')}</label><select id="sd" name="district">${distOpts(m.district)}</select></div><div><label for="so">${L('Date', 'Datum')}</label><input id="so" name="on" type="date" value="${day(0)}" min="${day(29)}" max="${day(0)}" required></div><p class="err" id="serr"></p><button class="btn" type="submit">${L('Mark as spotted', 'Als gespottet markieren')}</button></form>`;
   }
   if (m.t === 'model') c = `<h2 id="mt">${L('Request a model', 'Modell anfragen')}</h2><p class="mute sm">${L('Admins decide. Everyday cars such as a Porsche 911 Carrera are not accepted.', 'Admins entscheiden. Alltägliche Autos wie ein Porsche 911 Carrera werden nicht aufgenommen.')}</p>
 <form data-form="model"><div><label for="mq">${L('Brand and model', 'Marke und Modell')}</label><input id="mq" name="text" type="text" maxlength="60" placeholder="Bugatti Chiron" required></div><button class="btn" type="submit">${L('Send request', 'Anfrage senden')}</button></form>`;
@@ -637,6 +650,12 @@ async function act(a, d, e, el) {
       const id = +d.id, on = !S.favs.has(id); await api.setFav(S.me.id, id, on);
       on ? S.favs.add(id) : S.favs.delete(id); bust(); await render(); break;
     }
+    case 'spotted': {
+      if (needLogin()) break;
+      if (banned()) { toast(L('Your account is suspended.', 'Dein Konto ist gesperrt.')); break; }
+      const c = await cached('car' + d.id, () => api.getSpot(d.id));
+      openModal({ t: 'spotted', id: +d.id, district: c.spot.district, first: !(c.marks || []).some(x => x.user_id === S.me.id) }); break;
+    }
     case 'report': if (needLogin()) break; openModal({ t: 'report', k: d.k, id: +d.id, cid: d.cid ? +d.cid : null }); break;
     case 'edit': {
       const c = await cached('car' + d.id, () => api.getSpot(d.id));
@@ -740,6 +759,15 @@ async function submit(f) {
       const m = S.modal;
       await api.sendReport({ reporter_id: S.me.id, spot_id: m.id, comment_id: m.cid, reason: v.get('reason'), note: String(v.get('note') || '') });
       S.modal = null; toast(L('Report sent. An admin will look at it.', 'Meldung gesendet. Ein Admin schaut sie sich an.')); await render(); break;
+    }
+    case 'spotted': {
+      const m = S.modal, dd = +v.get('district'), on = String(v.get('on') || ''), er = $('#serr');
+      if (!dd) { er.textContent = L('Choose a district.', 'Wähle einen Bezirk.'); return; }
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(on)) { er.textContent = L('Choose a date.', 'Wähle ein Datum.'); return; }
+      try { await api.markSpotted(S.me.id, m.id, dd, on); }
+      catch (err) { er.textContent = err && err.code === '23505' ? L('You already marked this car for that day.', 'Du hast dieses Auto für diesen Tag schon markiert.') : errMsg(err); return; }
+      S.modal = null; bust();
+      toast(m.first ? L('Marked as spotted. You can now suggest changes.', 'Als gespottet markiert. Du kannst jetzt Änderungen vorschlagen.') : L('Marked as spotted.', 'Als gespottet markiert.')); await render(); break;
     }
     case 'edit': {
       const m = S.modal, s = m.spot, ch = { spot_id: s.id, user_id: S.me.id };

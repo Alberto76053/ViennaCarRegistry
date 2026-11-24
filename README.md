@@ -12,8 +12,9 @@ The site is plain HTML, CSS and JavaScript (no build step). It runs on GitHub Pa
 - Car page with several photos; guests see photos, paint and district, members see the full details with the source of the technical data
 - Official manufacturer paint names (for example Rosso Corsa) instead of a bare colour; the colour family is kept for filtering
 - Only real photos: there are no generated or demo cars
-- Upload with any number of photos, district only (never the exact place), optional production number
-- Verification queue for admins; Pro members are reviewed first; edits by users also need approval
+- Members upload cars (any number of photos, district only, never the exact place, optional production number); there is no separate "add a spot"
+- Other members mark a car as spotted (district and date). Everyone who spotted a car, and the uploader, can suggest changes to it
+- Verification queue for admins; Pro members are reviewed first; suggested changes also need approval
 - Likes, favourites, comments with word filter, warnings and a ban after three, report buttons
 - Public profiles with a Dream Garage (3 slots, +1 for every 5 approved uploads), follow, block, private messages, notifications
 - Events (admins only), model requests, admin applications (the CEO decides)
@@ -32,11 +33,12 @@ The site is plain HTML, CSS and JavaScript (no build step). It runs on GitHub Pa
 | `js/api.js` | All calls to Supabase |
 | `js/art.js` | Colour families, districts and small helpers |
 | `supabase/schema.sql` | Tables, access rules, triggers, storage buckets and start data |
+| `supabase/update-2-spotted.sql` | Only for databases set up earlier: adds the "spotted" marks |
 
 ## Roles
 
-- **Member**: can upload, comment, like, follow, message.
-- **Admin**: approves spots, edits and reports, adds events, grants Pro, suspends users.
+- **Member**: can upload cars, mark cars as spotted, suggest changes to cars they spotted, comment, like, follow, message.
+- **Admin**: approves cars, suggested changes and reports, adds events, grants Pro, suspends users.
 - **CEO**: everything an admin can, plus decides on admin applications. Set once in the database (see SETUP.md).
 
 ## What is not built yet

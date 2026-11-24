@@ -83,13 +83,18 @@ update public.profiles set role = 'ceo' where username = 'DEIN_BENUTZERNAME';
 
 3. Lade die Seite neu. Oben erscheint **Admin**.
 
-Nur der CEO entscheidet über Admin-Bewerbungen. Admins prüfen Spots, Änderungen, Meldungen und Modell-Anfragen, tragen Events ein und vergeben Pro.
+Nur der CEO entscheidet über Admin-Bewerbungen. Admins prüfen Autos, Änderungsvorschläge, Meldungen und Modell-Anfragen, tragen Events ein und vergeben Pro.
 
-## 7. Zum Ausprobieren: ein erster Spot
+## 7. Zum Ausprobieren: ein erstes Auto
 
-1. Mit deinem Konto: **Spot hinzufügen**, Modell wählen, den offiziellen Lack wählen (gibt es für das Modell keine Liste, wählst du eine Farbgruppe), Bezirk und Fotos. Es gibt keine Beispielautos: Das Register ist leer, bis echte Fotos hochgeladen und freigegeben sind.
-2. Unter **Admin → Spots** den Spot freigeben.
-3. Er erscheint jetzt im Register, auch für Gäste.
+1. Mit deinem Konto: **Auto hochladen**, Modell wählen, den offiziellen Lack wählen (gibt es für das Modell keine Liste, wählst du eine Farbgruppe), Bezirk und Fotos. Es gibt keine Beispielautos: Das Register ist leer, bis echte Fotos hochgeladen und freigegeben sind.
+2. Unter **Admin → Autos** das Auto freigeben.
+3. Es erscheint jetzt im Register, auch für Gäste.
+4. Mit einem zweiten Konto: Auto öffnen, **Als gespottet markieren**. Danach erscheint **Bearbeiten**, und das Konto kann Änderungen vorschlagen. Ein Admin gibt sie unter **Admin → Änderungen** frei.
+
+### Update: Datenbank schon eingerichtet?
+
+Hast du `schema.sql` früher schon ausgeführt, füge zusätzlich den Inhalt von `supabase/update-2-spotted.sql` im SQL Editor ein und führe ihn aus. Er legt die neue Tabelle für „gespottet"-Markierungen an und trägt bei vorhandenen Autos den Uploader als ersten Spotter ein. Ein frisches Projekt braucht nur `schema.sql`.
 
 ---
 
