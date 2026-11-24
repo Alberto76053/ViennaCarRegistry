@@ -242,11 +242,13 @@ language sql stable security definer set search_path = public as $$
   select coalesce((select banned from public.user_status where user_id = auth.uid()), false)
 $$;
 
+-- verrät nur Blockaden, an denen die aufrufende Person selbst beteiligt ist
 create or replace function public.is_blocked_between(a uuid, b uuid) returns boolean
 language sql stable security definer set search_path = public as $$
   select exists (
     select 1 from public.blocks
-    where (blocker_id = a and blocked_id = b) or (blocker_id = b and blocked_id = a)
+    where ((blocker_id = a and blocked_id = b) or (blocker_id = b and blocked_id = a))
+      and auth.uid() in (a, b)
   )
 $$;
 
@@ -374,7 +376,7 @@ create trigger spots_after_insert after insert on public.spots
   for each row execute function public.spots_after_insert();
 
 create or replace function public.spots_before_update() returns trigger
-language plpgsql as $$
+language plpgsql set search_path = public as $$
 begin
   if new.status = 'approved' and old.status is distinct from 'approved' then
     new.approved_at := now();
@@ -561,6 +563,26 @@ begin
     raise exception 'Unbekannte Aktion %', action;
   end if;
 end $$;
+
+-- Wer welche Funktion über die API aufrufen darf
+-- Trigger-Funktionen ruft niemand direkt auf
+revoke execute on function public.handle_new_user(), public.guard_profile(), public.filter_comment(),
+  public.spots_after_insert(), public.spots_after_update(), public.marks_after_insert(), public.garage_guard()
+  from public, anon, authenticated;
+-- Admin-Funktionen: nur angemeldete Personen (die Funktionen prüfen die Rolle selbst)
+revoke execute on function public.apply_edit(bigint), public.reject_edit(bigint),
+  public.approve_model_request(bigint, text, text), public.decline_model_request(bigint),
+  public.resolve_report(bigint, boolean), public.decide_application(bigint, boolean),
+  public.admin_user_action(uuid, text) from public, anon;
+grant execute on function public.apply_edit(bigint), public.reject_edit(bigint),
+  public.approve_model_request(bigint, text, text), public.decline_model_request(bigint),
+  public.resolve_report(bigint, boolean), public.decide_application(bigint, boolean),
+  public.admin_user_action(uuid, text) to authenticated;
+-- Hilfsfunktionen für die Zugriffsregeln: Gäste brauchen nur is_admin und is_pro_user
+revoke execute on function public.is_ceo(), public.is_banned(), public.is_blocked_between(uuid, uuid),
+  public.garage_slots(uuid) from public, anon;
+grant execute on function public.is_ceo(), public.is_banned(), public.is_blocked_between(uuid, uuid),
+  public.garage_slots(uuid) to authenticated;
 
 -- ---------------------------------------------------------------------
 -- 5. Ansichten (nur Zahlen, keine privaten Daten)
